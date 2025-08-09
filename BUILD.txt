@@ -1,0 +1,11 @@
+# Build instructions (Verilator >=5.x)
+# Linux/macOS:
+#   verilator -sv --binary tb_snn_csv.sv snn_core.sv
+#   ./tb_snn_csv +XCSV=artifacts/X_events_ref.csv +WHEX=artifacts/weights.hex +VTH=artifacts/vth.hex +OUT=artifacts/spikes_hw.csv
+#
+# Windows (MSYS2/MINGW64), similar:
+#   verilator -sv --binary tb_snn_csv.sv snn_core.sv
+#   ./tb_snn_csv.exe +XCSV=artifacts/X_events_ref.csv +WHEX=artifacts/weights.hex +VTH=artifacts/vth.hex +OUT=artifacts/spikes_hw.csv
+#
+# Compare against SW:
+#   python compare_spikes.py artifacts/spikes_hw.csv artifacts/spikes_sw.csv

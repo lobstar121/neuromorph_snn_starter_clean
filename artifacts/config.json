@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-08-08T07:37:08.347967Z",
+  "dataset": {
+    "B": 60,
+    "T": 76,
+    "F": 48,
+    "sr": 16000,
+    "hop": 128
+  },
+  "params": {
+    "n_inputs": 48,
+    "n_neurons": 96,
+    "dt": 0.002,
+    "tau_m": 0.035,
+    "v_th": 1.0,
+    "v_reset": 0.0,
+    "refrac": 0.004,
+    "w_in_scale": 0.75,
+    "wmin": -0.9,
+    "wmax": 0.9,
+    "tau_pre": 0.03,
+    "tau_post": 0.03,
+    "A_plus": 0.008,
+    "A_minus": 0.0075,
+    "i_bias": 0.02,
+    "target_rate": 0.06,
+    "eta_homeo": 0.007,
+    "vth_min": 0.5,
+    "vth_max": 2.0,
+    "seed": 0
+  },
+  "v_th_mean": 0.9371640086174011
+}
