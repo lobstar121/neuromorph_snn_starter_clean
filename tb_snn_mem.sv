@@ -5,13 +5,14 @@ module tb_snn_mem;
     localparam int F = 48;
     localparam int N = 96;
     localparam int Q = 14;
+    parameter int ALPHA_Q14 = 15474;
 
     // DUT
     logic clk = 0, rstn = 0;
     logic [F-1:0] event_vec;
     logic [N-1:0] spikes_vec;
 
-    snn_core #(.F(F), .N(N), .Q(Q)) dut (
+    snn_core #(.F(F), .N(N), .Q(Q), .ALPHA_Q14(ALPHA_Q14)) dut (
         .clk(clk), .rstn(rstn),
         .event_vec(event_vec),
         .spikes_vec(spikes_vec)

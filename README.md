@@ -42,3 +42,29 @@ This will:
 - Train a logistic regression on spike counts
 - Print accuracy and save a raster plot (`docs/raster_plot.png`).
 
+# Neuromorph SNN (F=48, N=96) — HW/SW Lockstep
+
+## Summary
+- Fixed-point LIF SNN (Q1.14), event-driven input
+- HW (Verilator) ↔ SW(Q1.14) **match = 1.000000**
+- Golden snapshot: `artifacts/golden_spikes.csv`
+
+## Quickstart
+```bash
+# 0) Build (Verilator)
+verilator -sv --binary tb_snn_mem.sv snn_core.sv lif_neuron.sv --top-module tb_snn_mem
+
+# 1) One-shot test (CSV→MEM → HW → SW(Q1.14) → Compare)
+make test
+
+# 2) Freeze GOLD
+make golden
+
+# 3) Compare HW vs GOLD any time
+make compare_golden
+
+# 4) Smoke (single-feature stimuli quick check)
+make smoke
+
+# 5) Smoke + compare (HW vs SW(Q1.14) for each)
+make smoke_compare
