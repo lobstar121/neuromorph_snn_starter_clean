@@ -1,49 +1,118 @@
-name: SNN HW/SW Match CI
+name: ci
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_smoke:
+        description: "Run smoke_compare"
+        type: boolean
+        default: false
+      run_sweeps:
+        description: "Run alpha/vth/grid sweeps"
+        type: boolean
+        default: false
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install deps (apt)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y verilator make g++ python3 python3-pip
+          sudo apt-get install -y verilator make g++ python3-pip
+          python -m pip install --upgrade pip
+          pip install numpy matplotlib
 
-      - name: Install Python deps (pip)
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install numpy
-
-      - name: Run make test (build & sim & compare)
+      - name: Clean & build & compare
+        env:
+          ALPHA_Q14: "15520"
         run: |
           make veryclean || true
+          rm -f artifacts/events_ref.mem || true
           make test
 
-      - name: Assert perfect match (diff=0)
+      - name: Assert match==1.0
         run: |
-          python3 - <<'PY'
+          python - << 'PY'
           import numpy as np, sys
-          a = np.loadtxt('artifacts/diff_mask.csv', delimiter=',', dtype=int)
-          diffs = int(a.sum())
-          print(f"[ASSERT] diffs={diffs}")
-          sys.exit(0 if diffs==0 else 1)
+          import os
+          p = "artifacts/diff_mask.csv"
+          if not os.path.exists(p):
+              print("[CI] diff_mask.csv not found"); sys.exit(1)
+          A = np.loadtxt(p, delimiter=",", dtype=int)
+          s = int(A.sum())
+          print(f"[CI] diff sum = {s}")
+          sys.exit(0 if s==0 else 2)
           PY
 
-      - name: Upload artifacts for debugging (on failure only)
-        if: failure()
+      - name: Upload basic artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-debug
+          name: basic-artifacts
           path: |
-            artifacts/**/*.csv
-            artifacts/**/*.mem
-            artifacts/**/*.hex
-            obj_dir/**
+            artifacts/spikes_hw.csv
+            artifacts/spikes_sw_q14.csv
+            artifacts/diff_mask.csv
+            artifacts/diff_heatmap.png
+            artifacts/mismatch_*.csv
+            artifacts/mismatch_report.txt
+          if-no-files-found: ignore
+
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_smoke }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator make g++ python3-pip
+          pip install numpy
+      - name: Run smoke_compare
+        env: { ALPHA_Q14: "15520" }
+        run: |
+          make veryclean || true
+          make smoke_compare
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: artifacts/*X_events_single*.csv
+
+  sweeps:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_sweeps }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator make g++ python3-pip
+          pip install numpy
+      - name: Run alpha/vth/grid sweeps
+        env: { ALPHA_Q14: "15520" }
+        run: |
+          make alpha_sweep
+          make vth_sweep
+          make grid_sweep
+      - name: Upload sweep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweep-results
+          path: artifacts/*sweep*csv
