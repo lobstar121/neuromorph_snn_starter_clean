@@ -16,7 +16,8 @@ GOLD=$(ART)/golden_spikes.csv
 # Toolchain / build opts
 VERILATOR ?= verilator
 TIMING    ?= --timing
-ALPHA_Q14 ?= 15520
+export ALPHA_Q14 ?= 15520
+
 
 TOP       := tb_snn_mem
 SRC       := tb_snn_mem.sv snn_core.sv lif_neuron.sv
@@ -24,6 +25,9 @@ SRC       := tb_snn_mem.sv snn_core.sv lif_neuron.sv
 # 단일-특성 스모크 입력
 SINGLE_CSV=$(ART)/X_events_single_f0.csv $(ART)/X_events_single_f1.csv $(ART)/X_events_single_f23.csv $(ART)/X_events_single_f24.csv
 SINGLE_MEM=$(SINGLE_CSV:.csv=.mem)
+
+swq14:
+> python fixedpoint_replay.py --alpha $(ALPHA_Q14)
 
 # ====== Build RTL sim ======
 OBJDIR=obj_dir
@@ -43,9 +47,6 @@ $(EV_MEM): $(EV_REF)
 
 hw: $(SIM) $(EV_MEM) $(WHEX) $(VTH)
 > $(SIM) +EVHEX=$(EV_MEM) +WHEX=$(WHEX) +VTH=$(VTH) +T=$(T) +OUT=$(HW_OUT)
-
-swq14:
-> python fixedpoint_replay.py
 
 compare:
 > python compare_spikes.py $(HW_OUT) $(SW_Q14)
@@ -116,3 +117,11 @@ release: $(SIM) $(EV_MEM) $(WHEX) $(VTH) $(GOLD)
 > @cp -f $(ART)/golden_spikes.csv release/artifacts/
 > @python release_readme.py
 > @echo "[REL] done."
+
+.PHONY: selfcheck ci
+# HW↔SW(Q14) 매치 1.0 아니면 실패
+selfcheck: test
+> python assert_match.py --expect 1.0 artifacts/spikes_hw.csv artifacts/spikes_sw_q14.csv
+
+# CI 진입점(깨끗이 빌드 후 강제검증)
+ci: veryclean selfcheck

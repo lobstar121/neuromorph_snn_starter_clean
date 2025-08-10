@@ -5,6 +5,26 @@ import numpy as np
 
 ART_DEFAULT = os.path.join(os.path.dirname(__file__), "artifacts")
 
+def simulate_fixed(
+    art_dir="artifacts",
+    X_csv="X_events_ref.csv",
+    W_hex="weights.hex",
+    VTH_hex="vth.hex",
+    T=76, F=48, N=96, Q=14,
+    alpha_q14=15474,
+    refrac_steps=2,
+    out_csv="spikes_sw_q14.csv",
+    cmp_mode="ge",
+    dbg_n=None, dbg_t0=None, dbg_t1=None
+):
+    # --- 재발 방지: 환경변수로 ALPHA_Q14 동기화 ---
+    env_alpha = os.getenv("ALPHA_Q14")
+    if env_alpha is not None:
+        try:
+            alpha_q14 = int(env_alpha)
+        except ValueError:
+            print(f"[WARN] ALPHA_Q14 env '{env_alpha}' invalid, using {alpha_q14}")
+
 def read_hex_q14(path):
     vals = []
     with open(path, "r") as f:
