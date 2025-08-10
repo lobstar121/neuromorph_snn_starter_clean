@@ -101,21 +101,21 @@ module snn_core #(
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             for (int n = 0; n < N; n++) begin
-                V_q14[n]      <= '0;
-                refrac[n]     <= 0;
-                spikes_vec[n] <= 1'b0;
+                V_q14[n]      = '0;
+                refrac[n]     = 0;
+                spikes_vec[n] = 1'b0;
             end
         end else begin
             for (int n = 0; n < N; n++) begin
                 // Spike decision (>=) & refractory gating
                 if (active[n] && ($signed(V_next[n]) >= $signed(vth_rom[n]))) begin
-                    spikes_vec[n] <= 1'b1;
-                    V_q14[n]      <= 16'sd0; // v_reset = 0 (Q1.14)
-                    refrac[n]     <= 2;      // ~0.004s at dt=0.002s
+                    spikes_vec[n] = 1'b1;
+                    V_q14[n]      = 16'sd0; // v_reset = 0 (Q1.14)
+                    refrac[n]     = 2;      // ~0.004s at dt=0.002s
                 end else begin
-                    spikes_vec[n] <= 1'b0;
-                    V_q14[n]      <= V_next[n];
-                    refrac[n]     <= (refrac[n] > 0) ? (refrac[n] - 1) : 0;
+                    spikes_vec[n] = 1'b0;
+                    V_q14[n]      = V_next[n];
+                    refrac[n]     = (refrac[n] > 0) ? (refrac[n] - 1) : 0;
                 end
             end
         end
