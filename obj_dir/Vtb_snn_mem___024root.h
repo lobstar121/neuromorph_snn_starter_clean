@@ -62,8 +62,6 @@ class alignas(VL_CACHE_LINE_BYTES) Vtb_snn_mem___024root final : public Verilate
     VlUnpacked<IData/*31:0*/, 96> tb_snn_mem__DOT__dut__DOT__leak32;
     VlUnpacked<IData/*31:0*/, 96> tb_snn_mem__DOT__dut__DOT__acc32;
     VlUnpacked<SData/*15:0*/, 96> tb_snn_mem__DOT__dut__DOT__V_next;
-    VlNBACommitQueue<VlUnpacked<SData/*15:0*/, 96>, false, SData/*15:0*/, 1> __VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__V_q14;
-    VlNBACommitQueue<VlUnpacked<IData/*31:0*/, 96>, false, IData/*31:0*/, 1> __VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__refrac;
     std::string tb_snn_mem__DOT__whex;
     std::string tb_snn_mem__DOT__vthx;
     std::string tb_snn_mem__DOT__evhex;

@@ -18,7 +18,7 @@ Vtb_snn_mem__Syms::Vtb_snn_mem__Syms(VerilatedContext* contextp, const char* nam
     , TOP{this, namep}
 {
         // Check resources
-        Verilated::stackCheck(190);
+        Verilated::stackCheck(142);
     // Configure time unit / time precision
     _vm_contextp__->timeunit(-9);
     _vm_contextp__->timeprecision(-12);

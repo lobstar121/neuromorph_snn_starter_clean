@@ -1546,31 +1546,6 @@ VL_INLINE_OPT void Vtb_snn_mem___024root___nba_sequent__TOP__0(Vtb_snn_mem___024
     VL_DEBUG_IF(VL_DBG_MSGF("+    Vtb_snn_mem___024root___nba_sequent__TOP__0\n"); );
     Vtb_snn_mem__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
     auto& vlSelfRef = std::ref(*vlSelf).get();
-    // Init
-    SData/*15:0*/ __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v0;
-    __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v0 = 0;
-    CData/*6:0*/ __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v0;
-    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v0 = 0;
-    IData/*31:0*/ __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v0;
-    __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v0 = 0;
-    CData/*6:0*/ __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v0;
-    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v0 = 0;
-    SData/*15:0*/ __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v1;
-    __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v1 = 0;
-    CData/*6:0*/ __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v1;
-    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v1 = 0;
-    IData/*31:0*/ __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v1;
-    __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v1 = 0;
-    CData/*6:0*/ __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v1;
-    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v1 = 0;
-    SData/*15:0*/ __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v2;
-    __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v2 = 0;
-    CData/*6:0*/ __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v2;
-    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v2 = 0;
-    IData/*31:0*/ __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v2;
-    __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v2 = 0;
-    CData/*6:0*/ __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v2;
-    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v2 = 0;
     // Body
     if (vlSelfRef.tb_snn_mem__DOT__rstn) {
         vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n = 0U;
@@ -1591,7 +1566,8 @@ VL_INLINE_OPT void Vtb_snn_mem___024root___nba_sequent__TOP__0(Vtb_snn_mem___024
                                               : 0U)))) {
                 vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h7b2f4ca3__0 = 1U;
                 vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h790d1774__0 = 0U;
-                if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))))) {
+                vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__0 = 2U;
+                if ((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))) {
                     vlSelfRef.tb_snn_mem__DOT__spikes_vec[(3U 
                                                            & (vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n 
                                                               >> 5U))] 
@@ -1603,24 +1579,27 @@ VL_INLINE_OPT void Vtb_snn_mem___024root___nba_sequent__TOP__0(Vtb_snn_mem___024
                                                 << 
                                                 (0x1fU 
                                                  & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)));
-                }
-                if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))))) {
-                    __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v0 
+                    vlSelfRef.tb_snn_mem__DOT__dut__DOT__V_q14[(0x7fU 
+                                                                & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)] 
                         = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h790d1774__0;
-                    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v0 
-                        = (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n);
-                    vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__V_q14.enqueue(__VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v0, (IData)(__VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v0));
-                }
-                vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__0 = 2U;
-                if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))))) {
-                    __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v0 
+                    vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac[(0x7fU 
+                                                                 & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)] 
                         = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__0;
-                    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v0 
-                        = (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n);
-                    vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__refrac.enqueue(__VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v0, (IData)(__VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v0));
                 }
             } else {
                 vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h7b2f4ca3__1 = 0U;
+                vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__1 
+                    = (VL_LTS_III(32, 0U, ((0x5fU >= 
+                                            (0x7fU 
+                                             & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))
+                                            ? vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac
+                                           [(0x7fU 
+                                             & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)]
+                                            : 0U)) ? 
+                       (((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))
+                          ? vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac
+                         [(0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)]
+                          : 0U) - (IData)(1U)) : 0U);
                 if ((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))) {
                     vlSelfRef.tb_snn_mem__DOT__spikes_vec[(3U 
                                                            & (vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n 
@@ -1636,34 +1615,14 @@ VL_INLINE_OPT void Vtb_snn_mem___024root___nba_sequent__TOP__0(Vtb_snn_mem___024
                     vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h790d1774__1 
                         = vlSelfRef.tb_snn_mem__DOT__dut__DOT__V_next
                         [(0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)];
+                    vlSelfRef.tb_snn_mem__DOT__dut__DOT__V_q14[(0x7fU 
+                                                                & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)] 
+                        = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h790d1774__1;
+                    vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac[(0x7fU 
+                                                                 & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)] 
+                        = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__1;
                 } else {
                     vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h790d1774__1 = 0U;
-                }
-                if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))))) {
-                    __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v1 
-                        = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h790d1774__1;
-                    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v1 
-                        = (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n);
-                    vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__V_q14.enqueue(__VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v1, (IData)(__VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v1));
-                }
-                vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__1 
-                    = (VL_LTS_III(32, 0U, ((0x5fU >= 
-                                            (0x7fU 
-                                             & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))
-                                            ? vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac
-                                           [(0x7fU 
-                                             & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)]
-                                            : 0U)) ? 
-                       (((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))
-                          ? vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac
-                         [(0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n)]
-                          : 0U) - (IData)(1U)) : 0U);
-                if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n))))) {
-                    __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v1 
-                        = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__1;
-                    __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v1 
-                        = (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n);
-                    vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__refrac.enqueue(__VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v1, (IData)(__VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v1));
                 }
             }
             vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk9__DOT__n 
@@ -1673,23 +1632,15 @@ VL_INLINE_OPT void Vtb_snn_mem___024root___nba_sequent__TOP__0(Vtb_snn_mem___024
         vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n = 0U;
         while (VL_GTS_III(32, 0x60U, vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n)) {
             vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h4c05f569__0 = 0U;
-            if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n))))) {
-                __VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v2 
-                    = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h4c05f569__0;
-                __VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v2 
-                    = (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n);
-                vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__V_q14.enqueue(__VdlyVal__tb_snn_mem__DOT__dut__DOT__V_q14__v2, (IData)(__VdlyDim0__tb_snn_mem__DOT__dut__DOT__V_q14__v2));
-            }
             vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hef173a4e__0 = 0U;
-            if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n))))) {
-                __VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v2 
-                    = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hef173a4e__0;
-                __VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v2 
-                    = (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n);
-                vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__refrac.enqueue(__VdlyVal__tb_snn_mem__DOT__dut__DOT__refrac__v2, (IData)(__VdlyDim0__tb_snn_mem__DOT__dut__DOT__refrac__v2));
-            }
             vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h4ba361bc__0 = 0U;
-            if (VL_LIKELY(((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n))))) {
+            if ((0x5fU >= (0x7fU & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n))) {
+                vlSelfRef.tb_snn_mem__DOT__dut__DOT__V_q14[(0x7fU 
+                                                            & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n)] 
+                    = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_h4c05f569__0;
+                vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac[(0x7fU 
+                                                             & vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n)] 
+                    = vlSelfRef.tb_snn_mem__DOT__dut__DOT____Vlvbound_hef173a4e__0;
                 vlSelfRef.tb_snn_mem__DOT__spikes_vec[(3U 
                                                        & (vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n 
                                                           >> 5U))] 
@@ -1704,8 +1655,6 @@ VL_INLINE_OPT void Vtb_snn_mem___024root___nba_sequent__TOP__0(Vtb_snn_mem___024
                 = ((IData)(1U) + vlSelfRef.tb_snn_mem__DOT__dut__DOT__unnamedblk8__DOT__n);
         }
     }
-    vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__V_q14.commit(vlSelfRef.tb_snn_mem__DOT__dut__DOT__V_q14);
-    vlSelfRef.__VdlyCommitQueuetb_snn_mem__DOT__dut__DOT__refrac.commit(vlSelfRef.tb_snn_mem__DOT__dut__DOT__refrac);
 }
 
 void Vtb_snn_mem___024root___timing_resume(Vtb_snn_mem___024root* vlSelf) {
