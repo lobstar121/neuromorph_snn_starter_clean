@@ -1,29 +1,29 @@
 # Mismatch Summary
 
-Match ratio overall = 0.987390
+Match ratio overall = 0.998904
 
 Top-10 timesteps (t, rate):
 
-  t= 25  rate=0.062500
-  t= 44  rate=0.062500
-  t= 45  rate=0.062500
-  t= 66  rate=0.062500
-  t= 32  rate=0.052083
-  t= 24  rate=0.052083
-  t= 13  rate=0.041667
-  t= 42  rate=0.041667
-  t= 47  rate=0.041667
-  t= 29  rate=0.041667
+  t= 24  rate=0.010417
+  t= 25  rate=0.010417
+  t= 45  rate=0.010417
+  t= 59  rate=0.010417
+  t= 60  rate=0.010417
+  t= 62  rate=0.010417
+  t= 44  rate=0.010417
+  t= 66  rate=0.010417
+  t=  8  rate=0.000000
+  t=  9  rate=0.000000
 
 Top-10 neurons (n, rate):
 
-  n= 44  rate=0.184211
-  n= 53  rate=0.105263
-  n=  4  rate=0.092105
-  n= 80  rate=0.092105
-  n= 89  rate=0.078947
-  n= 27  rate=0.078947
-  n= 43  rate=0.065789
-  n= 45  rate=0.065789
-  n= 56  rate=0.065789
-  n= 11  rate=0.052632
+  n= 79  rate=0.052632
+  n=  4  rate=0.026316
+  n= 66  rate=0.026316
+  n=  0  rate=0.000000
+  n=  3  rate=0.000000
+  n=  5  rate=0.000000
+  n=  2  rate=0.000000
+  n=  1  rate=0.000000
+  n=  8  rate=0.000000
+  n=  9  rate=0.000000

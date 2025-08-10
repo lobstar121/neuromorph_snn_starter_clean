@@ -36,7 +36,6 @@ class alignas(VL_CACHE_LINE_BYTES) Vtb_snn_mem___024root final : public Verilate
     SData/*15:0*/ tb_snn_mem__DOT__dut__DOT____Vlvbound_h4c05f569__0;
     VlWide<3>/*95:0*/ tb_snn_mem__DOT__spikes_vec;
     IData/*31:0*/ tb_snn_mem__DOT__T;
-    IData/*31:0*/ tb_snn_mem__DOT__unnamedblk3__DOT__unnamedblk4__DOT__n;
     IData/*31:0*/ tb_snn_mem__DOT__dut__DOT__unnamedblk3__DOT__unnamedblk4__DOT__unnamedblk5__DOT__w32_local;
     IData/*31:0*/ tb_snn_mem__DOT__dut__DOT__unnamedblk6__DOT__unnamedblk7__DOT__sum32_local;
     IData/*31:0*/ tb_snn_mem__DOT__dut__DOT__unnamedblk6__DOT__unnamedblk7__DOT__bias;
@@ -51,7 +50,7 @@ class alignas(VL_CACHE_LINE_BYTES) Vtb_snn_mem___024root final : public Verilate
     IData/*31:0*/ tb_snn_mem__DOT__dut__DOT____Vlvbound_hc40ee057__1;
     IData/*31:0*/ tb_snn_mem__DOT__dut__DOT____Vlvbound_hef173a4e__0;
     IData/*31:0*/ __VactIterCount;
-    QData/*47:0*/ tb_snn_mem__DOT__event_vec;
+    QData/*47:0*/ tb_snn_mem__DOT__event_vec_reg;
     VlUnpacked<QData/*47:0*/, 65536> tb_snn_mem__DOT__events_mem;
     VlUnpacked<SData/*15:0*/, 4608> tb_snn_mem__DOT__weights_mem;
     VlUnpacked<SData/*15:0*/, 96> tb_snn_mem__DOT__vth_mem;

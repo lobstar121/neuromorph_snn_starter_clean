@@ -157,7 +157,7 @@ VL_ATTR_COLD void Vtb_snn_mem___024root___ctor_var_reset(Vtb_snn_mem___024root* 
     // Body
     vlSelf->tb_snn_mem__DOT__clk = VL_RAND_RESET_I(1);
     vlSelf->tb_snn_mem__DOT__rstn = VL_RAND_RESET_I(1);
-    vlSelf->tb_snn_mem__DOT__event_vec = VL_RAND_RESET_Q(48);
+    vlSelf->tb_snn_mem__DOT__event_vec_reg = VL_RAND_RESET_Q(48);
     VL_RAND_RESET_W(96, vlSelf->tb_snn_mem__DOT__spikes_vec);
     vlSelf->tb_snn_mem__DOT__T = 0;
     for (int __Vi0 = 0; __Vi0 < 65536; ++__Vi0) {
@@ -169,7 +169,6 @@ VL_ATTR_COLD void Vtb_snn_mem___024root___ctor_var_reset(Vtb_snn_mem___024root* 
     for (int __Vi0 = 0; __Vi0 < 96; ++__Vi0) {
         vlSelf->tb_snn_mem__DOT__vth_mem[__Vi0] = VL_RAND_RESET_I(16);
     }
-    vlSelf->tb_snn_mem__DOT__unnamedblk3__DOT__unnamedblk4__DOT__n = 0;
     vlSelf->tb_snn_mem__DOT____Vlvbound_hd49f5adf__0 = VL_RAND_RESET_I(16);
     vlSelf->tb_snn_mem__DOT____Vlvbound_hf699eec9__0 = VL_RAND_RESET_I(16);
     for (int __Vi0 = 0; __Vi0 < 4608; ++__Vi0) {
