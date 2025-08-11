@@ -1,79 +1,112 @@
 # learn_stdp_sw.py
-import os, sys, argparse, numpy as np
-from learn_stdp_q14 import STDPParams, STDPState, sat16, round_shift_q, Q
+import os, sys, argparse
 import numpy as np
+from learn_stdp_q14 import STDPParams, STDPState, sat16, round_shift_q, Q as Q_CONST
 
-def _q14_round_div(x32: np.ndarray | int, Q: int) -> np.ndarray:
-    """Q14 고정소수점용 부호-반올림 쉬프트 (bias: +/− 2^(Q-1))."""
-    sgn = np.sign(x32).astype(np.int64)
-    bias = (1 << (Q - 1)) * sgn
-    return ((x32.astype(np.int64) + bias) >> Q).astype(np.int64)
+# --- 유틸 -------------------------------------------------------------
+
+def _q14_round_div(x32: np.ndarray | int, qbits: int) -> np.ndarray:
+    """Qx 고정소수점용 부호-반올림 쉬프트 (bias: ±2^(qbits-1))."""
+    x64 = np.asarray(x32, dtype=np.int64)
+    sgn = np.sign(x64)
+    bias = (1 << (qbits - 1)) * sgn
+    return ((x64 + bias) >> qbits).astype(np.int64)
 
 def _clip_int16(arr):
     return np.clip(arr, -32768, 32767).astype(np.int16)
 
+def _to_dict(obj):
+    """dataclass/Namespace -> dict 로 안전 변환."""
+    if isinstance(obj, dict):
+        return obj
+    try:
+        return vars(obj)
+    except TypeError:
+        return obj.__dict__
+
+def _get_state_arrays(state, F, N):
+    """
+    state가 dict 이든 STDPState 같은 객체이든 x(F,), y(N,) 배열을 꺼내고,
+    없으면 0으로 초기화해서 돌려줌. 또한, 호출자가 넘긴 state에 다시 반영할 수 있게
+    setter 함수도 함께 돌려줌.
+    """
+    # dict 케이스
+    if isinstance(state, dict):
+        if 'x' not in state or state['x'] is None:
+            state['x'] = np.zeros((F,), dtype=np.int64)
+        if 'y' not in state or state['y'] is None:
+            state['y'] = np.zeros((N,), dtype=np.int64)
+        def _setter(x_new, y_new):
+            state['x'] = x_new
+            state['y'] = y_new
+        return state['x'], state['y'], _setter
+
+    # 객체 케이스 (예: STDPState)
+    x = getattr(state, 'x', None)
+    y = getattr(state, 'y', None)
+    if x is None:
+        x = np.zeros((F,), dtype=np.int64)
+    if y is None:
+        y = np.zeros((N,), dtype=np.int64)
+    def _setter(x_new, y_new):
+        setattr(state, 'x', x_new)
+        setattr(state, 'y', y_new)
+    return x, y, _setter
+
+# --- STDP 한 스텝 -----------------------------------------------------
+
 def step_stdp(pre_bits: np.ndarray,
               post_bits: np.ndarray,
               W: np.ndarray,
-              params: dict,
-              state: dict):
+              params,
+              state):
     """
     pre_bits : shape (F,)  0/1
     post_bits: shape (N,)  0/1
     W        : shape (F,N) np.int16 (Q14 가중치)
-    params   : {
-        'Q':14, 'eta':int, 'eta_shift':int,
-        'lambda_x':int, 'lambda_y':int,  # 누적 추적 지수(Q14, 0~16384 부근)
-        'b_pre':int, 'b_post':int        # 스파이크 시 추적 증가량(Q14)
-    }
-    state    : {'x': np.int64 (F,), 'y': np.int64 (N,)}  # 추적 변수(Q14 스케일)
+    params   : dict 또는 STDPParams
+        keys: Q(옵션,기본14), eta, eta_shift, lambda_x, lambda_y, b_pre, b_post
+    state    : dict 또는 STDPState (x: (F,), y: (N,))  Q14 스케일 추적 변수
     """
-    Q = int(params.get('Q', 14))
-    eta = int(params['eta'])
-    eta_shift = int(params['eta_shift'])
-    lam_x = int(params['lambda_x'])
-    lam_y = int(params['lambda_y'])
-    b_pre = int(params['b_pre'])
-    b_post = int(params['b_post'])
+    # 파라미터 통일
+    p = _to_dict(params)
+    qbits      = int(p.get('Q', 14))
+    eta        = int(p['eta'])
+    eta_shift  = int(p['eta_shift'])
+    lam_x      = int(p['lambda_x'])
+    lam_y      = int(p['lambda_y'])
+    b_pre      = int(p['b_pre'])
+    b_post     = int(p['b_post'])
 
-    # 추적 변수 (Q14 정수 스케일)
-    if 'x' not in state:
-        state['x'] = np.zeros_like(pre_bits, dtype=np.int64)
-    if 'y' not in state:
-        state['y'] = np.zeros_like(post_bits, dtype=np.int64)
+    F, N = W.shape
+    # 상태 배열 확보 (+ setter)
+    x, y, set_state = _get_state_arrays(state, F, N)  # int64, Q14 해석
 
-    x = state['x']  # (F,)  presyn trace, Q14
-    y = state['y']  # (N,)  postsyn trace, Q14
+    # 1) 지수 감쇠
+    x[:] = _q14_round_div(lam_x * x, qbits)
+    y[:] = _q14_round_div(lam_y * y, qbits)
 
-    # 1) 추적 지수감쇠: x <- round((lam_x * x) / 2^Q), y도 동일
-    x[:] = _q14_round_div(lam_x * x, Q)
-    y[:] = _q14_round_div(lam_y * y, Q)
-
-    # 2) 스파이크 발생 시 바이어스 추가 (Q14 스케일)
-    #    pre_bits/post_bits는 0/1이므로, Q14로 올려 더함
-    if pre_bits.any():
+    # 2) 스파이크 시 추적 증가(Q14)
+    if np.any(pre_bits):
         x[:] += (pre_bits.astype(np.int64) * b_pre)
-    if post_bits.any():
+    if np.any(post_bits):
         y[:] += (post_bits.astype(np.int64) * b_post)
 
-    # 3) STDP 업데이트
-    #    흔한 형태: ΔW = η * ( pre_bits ⊗ y  −  x ⊗ post_bits )
-    #    (⊗: 외적, 모든 항은 Q14 스케일)
-    #    결과는 Q14로 다시 스케일링: (η/2^eta_shift) * Q14 -> 최종은 정수로 가중치에 더함
-    #    계산 중 오버플로 방지를 위해 int64로 확장
-    pre_outer_y  = np.outer(pre_bits.astype(np.int64), y)      # (F,N) Q14
-    x_outer_post = np.outer(x, post_bits.astype(np.int64))     # (F,N) Q14
-    dW_q14 = pre_outer_y - x_outer_post                        # (F,N) Q14
+    # 3) STDP ΔW = η * ( pre ⊗ y  −  x ⊗ post )  (모든 항 Q14)
+    pre_outer_y  = np.outer(pre_bits.astype(np.int64), y)          # (F,N) Q14
+    x_outer_post = np.outer(x,                 post_bits.astype(np.int64))  # (F,N) Q14
+    dW_q14 = pre_outer_y - x_outer_post                               # (F,N) Q14
 
     # η 적용 및 스케일 다운
-    dW_scaled = (eta * dW_q14) >> int(eta_shift)               # 여전히 Q14 정수 해석
+    dW_scaled = (eta * dW_q14) >> eta_shift                           # (F,N) 정수(Q14 해석)
 
-    # 4) 가중치 갱신 & int16 범위로 클리핑
+    # 4) 가중치 갱신 + int16 클리핑
     W[:] = _clip_int16(W.astype(np.int64) + dW_scaled)
 
-    # state 갱신 저장
-    state['x'] = x
-    state['y'] = y
+    # 상태 반영
+    set_state(x, y)
+
+# --- 전방 시뮬 --------------------------------------------------------
 
 ART = os.path.join(os.path.dirname(__file__), "artifacts")
 
@@ -104,12 +137,11 @@ def forward_step_q14(V, refr, X_row, W, Vth, alpha_q14, refrac_steps, thresh_ge=
     X_row: (F,) {0,1}, W: (F,N) int16, Vth: (N,) int16
     """
     F, N = W.shape
-    # leak (Q14 * Q14 -> Q28 >> 14)
+    # leak (Q14 * Q14 -> Q28 >> Q)
     leak32 = np.int64(alpha_q14) * np.int64(V.astype(np.int64))
-    leak_q14 = round_shift_q(leak32, Q)  # int64
+    leak_q14 = round_shift_q(leak32, Q_CONST)  # int64
 
     if np.any(X_row):
-        # 활성 채널 가중치 합산
         idx = np.where(X_row != 0)[0]
         acc32 = np.sum(np.int64(W[idx, :]), axis=0)  # (N,)
     else:
@@ -130,6 +162,8 @@ def forward_step_q14(V, refr, X_row, W, Vth, alpha_q14, refrac_steps, thresh_ge=
     refr[~fire] = np.maximum(0, refr[~fire] - 1)
 
     return fire.astype(np.int16)  # (N,)
+
+# --- 엔트리포인트 -----------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser()
@@ -188,6 +222,7 @@ def main():
         pre = X[t, :].astype(np.int16)   # (F,)
         post = forward_step_q14(V, refr, pre, W, Vth, args.alpha, args.refrac, thresh_ge=ge)
         spikes[t, :] = post
+
         # STDP 한 스텝
         step_stdp(pre, post, W, params, state)
 
