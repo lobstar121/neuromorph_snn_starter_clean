@@ -59,9 +59,16 @@ def sim_hw(mdir, vth_hex, outcsv):
     )
 
 def sim_sw(x_csv, out_csv, T, vth_hex, alpha_q14):
-    # sw_q14_from_csv.py를 2단계에서 만든 버전으로 사용
+    # ✅ argparse 버전으로 호출
     subprocess.check_call([
-        "python","sw_q14_from_csv.py", x_csv, out_csv, str(T), vth_hex, "weights.hex", str(alpha_q14)
+        "python","sw_q14_from_csv.py",
+        "--in",  os.path.join(ART, x_csv),
+        "--out", out_csv,
+        "--T",   str(T),
+        "--vth", vth_hex,
+        "--weights", "weights.hex",
+        "--alpha", str(alpha_q14),
+        "--quiet"
     ])
 
 def compare_csv(a,b):
@@ -80,6 +87,7 @@ def spike_rate(path_csv):
     return float(S.mean())
 
 if __name__=="__main__":
+    os.makedirs(ART, exist_ok=True)
     # --- 탐색 격자 (필요시 수정) ---
     alphas = [15320, 15360, 15400, 15474, 15520, 15560, 15600]
     vth_shifts = [-4, -2, -1, 0, 1, 2, 4]
@@ -88,7 +96,7 @@ if __name__=="__main__":
     results=[]
     base_vth = "vth.hex"
 
-    # 사전: VTH 쉬프트 파일 생성(0은 원본 사용)
+    # VTH 쉬프트 파일 미리 준비(0은 원본)
     vth_files = {}
     for s in vth_shifts:
         if s == 0:
@@ -105,11 +113,11 @@ if __name__=="__main__":
             # HW
             out_hw = os.path.join(ART, f"spikes_hw_a{a}_v{s:+d}.csv".replace("+","p"))
             sim_hw(mdir, vth_hex, out_hw)
-            # SW (동일 파라미터)
-            out_sw = os.path.join(ART, f"spikes_sw_q14_a{a}_v{s:+d}.csv".replace("+","p"))
-            sim_sw("X_events_ref.csv", os.path.basename(out_sw), T, vth_hex, a)
+            # SW
+            out_sw = f"spikes_sw_q14_a{a}_v{s:+d}.csv".replace("+","p")
+            sim_sw("X_events_ref.csv", out_sw, T, vth_hex, a)
 
-            mr = compare_csv(out_hw, out_sw)
+            mr = compare_csv(out_hw, os.path.join(ART, out_sw))
             sr = spike_rate(out_hw)
             results.append((a, s, mr, sr))
             print(f"[GRID] alpha={a} vth_shift={s:+d}  match={mr:.6f}  rate={sr:.6f}")
