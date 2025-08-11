@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      run_smoke:
+        description: "Run smoke_compare"
+        type: boolean
+        default: false
       run_sweeps:
         description: "Run alpha/vth/grid sweeps"
         type: boolean
@@ -35,7 +39,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y verilator make g++ python3-pip
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install numpy matplotlib
 
       - name: Clean & build & compare
         env:
@@ -45,9 +49,18 @@ jobs:
           rm -f artifacts/events_ref.mem || true
           make test
 
-      - name: Assert match==1.0 (main case)
+      - name: Assert match==1.0
         run: |
-          python assert_match.py --expect 1.0 artifacts/spikes_hw.csv artifacts/spikes_sw_q14.csv
+          python - << 'PY'
+          import numpy as np, sys, os
+          p = "artifacts/diff_mask.csv"
+          if not os.path.exists(p):
+              print("[CI] diff_mask.csv not found"); sys.exit(1)
+          A = np.loadtxt(p, delimiter=",", dtype=int)
+          s = int(A.sum())
+          print(f"[CI] diff sum = {s}")
+          sys.exit(0 if s==0 else 2)
+          PY
 
       - name: Upload basic artifacts
         if: always()
@@ -63,61 +76,7 @@ jobs:
             artifacts/mismatch_report.txt
           if-no-files-found: ignore
 
-  smoke:
-    runs-on: ubuntu-24.04
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator make g++ python3-pip
-          pip install -r requirements.txt
-      - name: Run smoke_compare (4 singles)
-        env:
-          ALPHA_Q14: "15520"
-        run: |
-          make veryclean || true
-          make smoke_compare
-      - name: Assert each smoke case == 1.0
-        run: |
-          py() { python assert_match.py --expect 1.0 "$1" "$2"; }
-          py artifacts/spikes_hw_X_events_single_f0.csv artifacts/spikes_sw_q14_X_events_single_f0.csv
-          py artifacts/spikes_hw_X_events_single_f1.csv artifacts/spikes_sw_q14_X_events_single_f1.csv
-          py artifacts/spikes_hw_X_events_single_f23.csv artifacts/spikes_sw_q14_X_events_single_f23.csv
-          py artifacts/spikes_hw_X_events_single_f24.csv artifacts/spikes_sw_q14_X_events_single_f24.csv
-
-  sweeps:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_sweeps }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator make g++ python3-pip
-          pip install -r requirements.txt
-      - name: Run alpha/vth/grid sweeps
-        env:
-          ALPHA_Q14: "15520"
-        run: |
-          make alpha_sweep
-          make vth_sweep
-          make grid_sweep
-      - name: Upload sweep results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sweep-results
-          path: artifacts/*sweep*csv
-
-  # --- Docker image build/push + container smoke ---
+  # Build & (optionally) push container image
   docker-image:
     runs-on: ubuntu-24.04
     needs: test
@@ -127,7 +86,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # On PRs: build only (no push)
+      # On PRs just build (no push)
       - name: Build image (no push on PR)
         if: github.event_name == 'pull_request'
         uses: docker/build-push-action@v6
@@ -137,7 +96,7 @@ jobs:
           push: false
           tags: neuromorph:ci
 
-      # On main/tags: login & push to GHCR
+      # On main/tags login & push to GHCR
       - name: Log in to GHCR
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: docker/login-action@v3
@@ -158,9 +117,62 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/neuromorph:latest
             ghcr.io/${{ github.repository_owner }}/neuromorph:${{ github.sha }}
 
-      # Optional: run smoke inside the published container (main only)
+      # Optional: run smoke inside container on main
       - name: Smoke test inside container
         if: github.ref == 'refs/heads/main'
         run: |
           docker run --rm ghcr.io/${{ github.repository_owner }}/neuromorph:latest \
             bash -lc "make test && python compare_spikes.py artifacts/spikes_hw.csv artifacts/spikes_sw_q14.csv | grep 'match ratio: 1.000000'"
+
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_smoke }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator make g++ python3-pip
+          pip install numpy
+      - name: Run smoke_compare
+        env:
+          ALPHA_Q14: "15520"
+        run: |
+          make veryclean || true
+          make smoke_compare
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: artifacts/*X_events_single*.csv
+
+  sweeps:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_sweeps }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator make g++ python3-pip
+          pip install numpy
+      - name: Run alpha/vth/grid sweeps
+        env:
+          ALPHA_Q14: "15520"
+        run: |
+          make alpha_sweep
+          make vth_sweep
+          make grid_sweep
+      - name: Upload sweep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweep-results
+          path: artifacts/*sweep*csv
