@@ -1,6 +1,6 @@
-numpy
 scipy
 librosa
 soundfile
 scikit-learn
-matplotlib
+numpy==2.0.1
+matplotlib==3.9.0
