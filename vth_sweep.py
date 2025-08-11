@@ -1,9 +1,9 @@
-# vth_sweep.py — VTH(hex) ±LSB 스윕: HW↔SW(Q14) 매칭 & 발화율 수집
+# vth_sweep.py — VTH(hex) ±LSB 스윕: HW↔SW(Q14) 매칭 & 발화율 수집 (argparse/positional 모두 지원)
 import os, sys, subprocess, shutil
 import numpy as np
 
 ART = "artifacts"
-ALPHA = 15474  # 1단계에서 고른 값 고정(필요시 수정)
+ALPHA = 15474  # 필요시 수정
 T = 76
 F, N = 48, 96
 
@@ -60,7 +60,7 @@ def compare_csv(a,b):
     return mr if mr is not None else 0.0
 
 def ensure_binary(alpha, mdir):
-    # A) 빌드 전 대상 Mdir 강제 삭제
+    # 매 빌드 클린 보장
     if os.path.isdir(mdir):
         shutil.rmtree(mdir)
     verilator = "/mingw64/bin/verilator"
@@ -69,6 +69,32 @@ def ensure_binary(alpha, mdir):
           f'--top-module tb_snn_mem -Mdir {mdir} -GALPHA_Q14={alpha} --timing'
     run_sh(cmd)
 
+def run_sw_q14(x_csv_rel, out_csv_name, T, vth_hex_name, alpha_q14):
+    """argparse 버전 먼저 시도 → 실패 시 positional 구버전으로 폴백."""
+    x_csv_path = os.path.join(ART, x_csv_rel)
+    # 1) argparse 스타일
+    cmd1 = [
+        "python","sw_q14_from_csv.py",
+        "--in", x_csv_path,
+        "--out", os.path.join(ART, out_csv_name),
+        "--T", str(T),
+        "--vth", vth_hex_name,
+        "--weights", "weights.hex",
+        "--alpha", str(alpha_q14),
+        "--quiet"
+    ]
+    r = subprocess.run(cmd1)
+    if r.returncode == 0:
+        return
+    # 2) positional 구버전 스타일
+    cmd2 = [
+        "python","sw_q14_from_csv.py",
+        x_csv_rel, out_csv_name, str(T), vth_hex_name, "weights.hex", str(alpha_q14)
+    ]
+    r2 = subprocess.run(cmd2)
+    if r2.returncode != 0:
+        raise SystemExit("[ERR] sw_q14_from_csv.py failed (both argparse and positional modes).")
+
 def run_one(alpha, vth_hex_name):
     mdir = f"obj_dir_alpha_{alpha}"
     ensure_binary(alpha, mdir)
@@ -76,28 +102,22 @@ def run_one(alpha, vth_hex_name):
     run_sh(f'./{mdir}/Vtb_snn_mem +EVHEX={ART}/events_ref.mem +WHEX={ART}/weights.hex '
            f'+VTH={ART}/{vth_hex_name} +T={T} +OUT={out_hw}')
 
-    out_sw = os.path.join(ART, f"spikes_sw_q14_{vth_hex_name.replace('.hex','')}.csv")
-    # SW도 동일 vth로 재생
-    subprocess.check_call(["python","sw_q14_from_csv.py","--in", "artifacts/X_events_ref.csv",
-                           "--out", os.path.basename(out_sw),
-                           "--T", str(T), "--vth", vth_hex_name, "--weights", "weights.hex",
-                           "--alpha", str(alpha), "--quiet"])
+    out_sw_name = f"spikes_sw_q14_{vth_hex_name.replace('.hex','')}.csv"
+    run_sw_q14("X_events_ref.csv", out_sw_name, T, vth_hex_name, alpha)
 
-    mr = compare_csv(out_hw, out_sw)
+    mr = compare_csv(out_hw, os.path.join(ART, out_sw_name))
     sr = spike_rate(out_hw)
-    return mr, sr, out_hw, out_sw
+    return mr, sr, out_hw, os.path.join(ART, out_sw_name)
 
 if __name__=="__main__":
-    # 쉬프트 후보(LSB): 필요시 조정
     shifts = [-4, -2, -1, 0, +1, +2, +4]
     results=[]
-    names=[]
     for s in shifts:
         name = "vth.hex" if s==0 else make_shifted("vth.hex", s)
-        names.append(name)
         mr, sr, _, _ = run_one(ALPHA, name)
         results.append((s, mr, sr))
     res = np.array(results, dtype=float)
     out = os.path.join(ART, "vth_sweep_results.csv")
-    np.savetxt(out, res, fmt="%.6f", delimiter=",", header="shift_LSB,match_ratio,mean_spike_rate", comments="")
+    np.savetxt(out, res, fmt="%.6f", delimiter=",",
+               header="shift_LSB,match_ratio,mean_spike_rate", comments="")
     print(f"[VTH-SWEEP] saved {out}")

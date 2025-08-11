@@ -1,4 +1,4 @@
-# grid_sweep.py — Joint sweep of ALPHA_Q14 × VTH shift (HW↔SW match & spike rate)
+# grid_sweep.py — Joint sweep of ALPHA_Q14 × VTH shift (HW↔SW match & spike rate) (호출 폴백 포함)
 import os, sys, subprocess, shutil
 import numpy as np
 
@@ -40,7 +40,6 @@ def make_vth_shift(base_hex, shift, outname=None):
     return name
 
 def ensure_binary(alpha, mdir):
-    # A) 빌드 전 대상 Mdir 강제 삭제
     if os.path.isdir(mdir):
         shutil.rmtree(mdir)
     verilator = "/mingw64/bin/verilator"
@@ -61,18 +60,29 @@ def sim_hw(mdir, vth_hex, outcsv):
         f'+T={T} +OUT={outcsv}'
     )
 
-def sim_sw(x_csv, out_csv, T, vth_hex, alpha_q14):
-    # sw_q14_from_csv.py (argparse 버전)
-    subprocess.check_call([
+def run_sw_q14(x_csv_rel, out_csv_name, T, vth_hex_name, alpha_q14):
+    # argparse 먼저 → 실패 시 positional
+    x_csv_path = os.path.join(ART, x_csv_rel)
+    cmd1 = [
         "python","sw_q14_from_csv.py",
-        "--in", os.path.join(ART, x_csv),
-        "--out", os.path.join(ART, out_csv),
+        "--in", x_csv_path,
+        "--out", os.path.join(ART, out_csv_name),
         "--T", str(T),
-        "--vth", vth_hex,
+        "--vth", vth_hex_name,
         "--weights", "weights.hex",
         "--alpha", str(alpha_q14),
         "--quiet"
-    ])
+    ]
+    r = subprocess.run(cmd1)
+    if r.returncode == 0:
+        return
+    cmd2 = [
+        "python","sw_q14_from_csv.py",
+        x_csv_rel, out_csv_name, str(T), vth_hex_name, "weights.hex", str(alpha_q14)
+    ]
+    r2 = subprocess.run(cmd2)
+    if r2.returncode != 0:
+        raise SystemExit("[ERR] sw_q14_from_csv.py failed (both argparse and positional modes).")
 
 def compare_csv(a,b):
     r = subprocess.run(["python","compare_spikes.py", a, b],
@@ -90,15 +100,12 @@ def spike_rate(path_csv):
     return float(S.mean())
 
 if __name__=="__main__":
-    # --- 탐색 격자 (필요시 수정) ---
     alphas = [15320, 15360, 15400, 15474, 15520, 15560, 15600]
     vth_shifts = [-4, -2, -1, 0, 1, 2, 4]
-    # -----------------------------
 
     results=[]
     base_vth = "vth.hex"
 
-    # 사전: VTH 쉬프트 파일 생성(0은 원본 사용)
     vth_files = {}
     for s in vth_shifts:
         if s == 0:
@@ -109,22 +116,20 @@ if __name__=="__main__":
 
     for a in alphas:
         mdir = f"obj_dir_alpha_{a}"
-        ensure_binary(a, mdir)   # 여기서만 리빌드 -> 같은 alpha 내에서는 재사용
+        ensure_binary(a, mdir)
         for s in vth_shifts:
             vth_hex = vth_files[s]
-            # HW
             out_hw = os.path.join(ART, f"spikes_hw_a{a}_v{s:+d}.csv".replace("+","p"))
             sim_hw(mdir, vth_hex, out_hw)
-            # SW (동일 파라미터)
+
             out_sw = f"spikes_sw_q14_a{a}_v{s:+d}.csv".replace("+","p")
-            sim_sw("X_events_ref.csv", out_sw, T, vth_hex, a)
+            run_sw_q14("X_events_ref.csv", out_sw, T, vth_hex, a)
 
             mr = compare_csv(out_hw, os.path.join(ART, out_sw))
             sr = spike_rate(out_hw)
             results.append((a, s, mr, sr))
             print(f"[GRID] alpha={a} vth_shift={s:+d}  match={mr:.6f}  rate={sr:.6f}")
 
-    # 저장
     arr = np.array(results, dtype=float)
     outp = os.path.join(ART, "grid_sweep_results.csv")
     np.savetxt(outp, arr, fmt="%.6f", delimiter=",",
