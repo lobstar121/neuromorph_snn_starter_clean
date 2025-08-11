@@ -13,6 +13,10 @@ on:
         description: "Run alpha/vth/grid sweeps"
         type: boolean
         default: false
+      run_learn:
+        description: "Run SW-only STDP learn_smoke"
+        type: boolean
+        default: false
 
 # Docker 패키지 푸시용 권한
 permissions:
@@ -89,7 +93,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # PR 외에는 GHCR 로그인 (push 하기 위함)
+      # PR이 아니면 GHCR 로그인 (push 위해)
       - name: Log in to GHCR
         if: ${{ github.event_name != 'pull_request' }}
         uses: docker/login-action@v3
@@ -174,6 +178,41 @@ jobs:
           name: sweep-results
           path: artifacts/*sweep*csv
 
+  # ---- 수동 트리거: SW-only 학습 스모크 ----
+  learn:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_learn }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (SW-only)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make g++ python3-pip
+          python -m pip install --upgrade pip
+          pip install numpy
+
+      - name: Run SW-only learn_smoke
+        env:
+          ALPHA_Q14: "15474"
+        run: |
+          make learn_clean || true
+          make learn_smoke
+
+      - name: Upload learn artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: learn-artifacts
+          path: |
+            artifacts/weights_learned.hex
+            artifacts/spikes_sw_learn.csv
+          if-no-files-found: warn
+
   # ---- Optional: run full tuning & finalize (manual) ----
   tune:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_sweeps }}
@@ -208,8 +247,6 @@ jobs:
 
       - name: Re-test with selected params (expect 1.0)
         env:
-          # Makefile이 artifacts/alpha_selected.txt / vth_selected.hex를 자동 반영함
-          # 환경변수로 강제 오버라이드하고 싶다면 ALPHA_Q14를 지정하면 됨.
           ALPHA_Q14: ""
         run: |
           make veryclean || true
