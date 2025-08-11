@@ -1,0 +1,22 @@
+# Git/IDE/venv
+.git
+.venv
+__pycache__/
+*.pyc
+
+# 빌드 산출물
+obj_dir/
+obj_dir_*/
+obj_dir_alpha_*/
+release/
+
+# 대용량/생성 파일
+artifacts/*.csv
+artifacts/diff_*.*
+artifacts/mismatch_*.csv
+
+# 고정으로 필요한 아티팩트는 제외(Keep)
+!artifacts/golden_spikes.csv
+!artifacts/events_ref.mem
+!artifacts/weights.hex
+!artifacts/vth.hex
