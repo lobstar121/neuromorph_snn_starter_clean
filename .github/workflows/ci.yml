@@ -173,3 +173,69 @@ jobs:
         with:
           name: sweep-results
           path: artifacts/*sweep*csv
+
+  # ---- Optional: run full tuning & finalize (manual) ----
+  tune:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_sweeps }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator make g++ python3-pip
+          python -m pip install --upgrade pip
+          pip install numpy matplotlib
+
+      - name: Run all sweeps
+        run: |
+          make alpha_sweep
+          make vth_sweep
+          make grid_sweep
+
+      - name: Analyze & select params
+        run: |
+          python analyze_sweeps.py
+          echo "---- selected ----"
+          cat artifacts/alpha_selected.txt || true
+          ls -l artifacts/vth_selected.hex || true
+
+      - name: Re-test with selected params (expect 1.0)
+        env:
+          # Makefile이 artifacts/alpha_selected.txt / vth_selected.hex를 자동 반영함
+          # 환경변수로 강제 오버라이드하고 싶다면 ALPHA_Q14를 지정하면 됨.
+          ALPHA_Q14: ""
+        run: |
+          make veryclean || true
+          rm -f artifacts/events_ref.mem || true
+          make test
+          python - << 'PY'
+          import numpy as np, sys, os
+          p = "artifacts/diff_mask.csv"
+          if not os.path.exists(p):
+              print("[CI] diff_mask.csv not found"); sys.exit(1)
+          A = np.loadtxt(p, delimiter=",", dtype=int)
+          s = int(A.sum())
+          print(f"[CI] diff sum = {s}")
+          sys.exit(0 if s==0 else 2)
+          PY
+
+      - name: Upload tuning artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuning-artifacts
+          path: |
+            artifacts/*sweep*csv
+            artifacts/alpha_selected.txt
+            artifacts/vth_selected.hex
+            artifacts/spikes_hw.csv
+            artifacts/spikes_sw_q14.csv
+            artifacts/diff_mask.csv
+          if-no-files-found: ignore

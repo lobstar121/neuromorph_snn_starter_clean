@@ -8,7 +8,20 @@ T=76
 EV_REF=$(ART)/X_events_ref.csv
 EV_MEM=$(ART)/events_ref.mem
 WHEX=$(ART)/weights.hex
-VTH=$(ART)/vth.hex
+# --- 선택형 파라미터 자동 반영 ---
+ALPHA_FILE := $(ART)/alpha_selected.txt
+VTH_SEL    := $(ART)/vth_selected.hex
+# 기본값
+ALPHA_Q14 ?= 15520
+VTH       := $(ART)/vth.hex
+# 파일이 있으면 우선 사용
+ifneq ("$(wildcard $(ALPHA_FILE))","")
+ALPHA_Q14 := $(shell sed -n '1p' $(ALPHA_FILE))
+endif
+ifneq ("$(wildcard $(VTH_SEL))","")
+VTH := $(VTH_SEL)
+endif
+
 HW_OUT=$(ART)/spikes_hw.csv
 SW_Q14=$(ART)/spikes_sw_q14.csv
 GOLD=$(ART)/golden_spikes.csv
@@ -16,8 +29,7 @@ GOLD=$(ART)/golden_spikes.csv
 # Toolchain / build opts
 VERILATOR ?= verilator
 TIMING    ?= --timing
-export ALPHA_Q14 ?= 15520
-
+export ALPHA_Q14
 
 TOP       := tb_snn_mem
 SRC       := tb_snn_mem.sv snn_core.sv lif_neuron.sv
@@ -33,7 +45,7 @@ swq14:
 OBJDIR=obj_dir
 SIM=$(OBJDIR)/V$(TOP)
 
-.PHONY: all test golden hw swq14 compare smoke clean veryclean smoke_compare report alpha_sweep vth_sweep grid_sweep release compare_golden
+.PHONY: all test golden hw swq14 compare smoke clean veryclean smoke_compare report alpha_sweep vth_sweep grid_sweep release compare_golden analyze finalize selfcheck ci
 
 all: test
 
@@ -88,6 +100,7 @@ report:
 > python spike_report.py artifacts/spikes_hw.csv hw
 > python spike_report.py artifacts/spikes_sw_q14.csv swq14
 
+# ====== 4) Tuning Sweeps ======
 alpha_sweep:
 > PATH=/mingw64/bin:$(PATH) python alpha_sweep.py
 
@@ -97,20 +110,26 @@ vth_sweep:
 grid_sweep:
 > PATH=/mingw64/bin:$(PATH) python grid_sweep.py
 
+analyze:
+> python analyze_sweeps.py
+
+finalize: alpha_sweep vth_sweep grid_sweep analyze
+> @echo "[FINALIZE] alpha/VTH selection completed."
+
 clean:
 > @rm -f $(ART)/spikes_hw*.csv $(ART)/events_*.mem $(ART)/diff_mask.csv
 
 veryclean: clean
 > @rm -rf $(OBJDIR)
 
-# ====== 4) Release package ======
+# ====== 5) Release package ======
 release: $(SIM) $(EV_MEM) $(WHEX) $(VTH) $(GOLD)
 > @echo "[REL] assembling release/"
 > @rm -rf release
 > @mkdir -p release/artifacts
 > @cp -f $(SIM) release/
 > @cp -f tb_snn_mem.sv snn_core.sv lif_neuron.sv Makefile release/
-> @cp -f fixedpoint_replay.py compare_spikes.py csv2mem.py sw_q14_from_csv.py release/
+> @cp -f fixedpoint_replay.py compare_spikes.py csv2mem.py sw_q14_from_csv.py analyze_sweeps.py release/
 > @cp -f $(ART)/weights.hex release/artifacts/
 > @cp -f $(ART)/vth.hex release/artifacts/
 > @cp -f $(ART)/events_ref.mem release/artifacts/
@@ -118,7 +137,6 @@ release: $(SIM) $(EV_MEM) $(WHEX) $(VTH) $(GOLD)
 > @python release_readme.py
 > @echo "[REL] done."
 
-.PHONY: selfcheck ci
 # HW↔SW(Q14) 매치 1.0 아니면 실패
 selfcheck: test
 > python assert_match.py --expect 1.0 artifacts/spikes_hw.csv artifacts/spikes_sw_q14.csv
