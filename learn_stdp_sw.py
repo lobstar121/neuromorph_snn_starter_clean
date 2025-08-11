@@ -1,6 +1,79 @@
 # learn_stdp_sw.py
 import os, sys, argparse, numpy as np
 from learn_stdp_q14 import STDPParams, STDPState, sat16, round_shift_q, Q
+import numpy as np
+
+def _q14_round_div(x32: np.ndarray | int, Q: int) -> np.ndarray:
+    """Q14 고정소수점용 부호-반올림 쉬프트 (bias: +/− 2^(Q-1))."""
+    sgn = np.sign(x32).astype(np.int64)
+    bias = (1 << (Q - 1)) * sgn
+    return ((x32.astype(np.int64) + bias) >> Q).astype(np.int64)
+
+def _clip_int16(arr):
+    return np.clip(arr, -32768, 32767).astype(np.int16)
+
+def step_stdp(pre_bits: np.ndarray,
+              post_bits: np.ndarray,
+              W: np.ndarray,
+              params: dict,
+              state: dict):
+    """
+    pre_bits : shape (F,)  0/1
+    post_bits: shape (N,)  0/1
+    W        : shape (F,N) np.int16 (Q14 가중치)
+    params   : {
+        'Q':14, 'eta':int, 'eta_shift':int,
+        'lambda_x':int, 'lambda_y':int,  # 누적 추적 지수(Q14, 0~16384 부근)
+        'b_pre':int, 'b_post':int        # 스파이크 시 추적 증가량(Q14)
+    }
+    state    : {'x': np.int64 (F,), 'y': np.int64 (N,)}  # 추적 변수(Q14 스케일)
+    """
+    Q = int(params.get('Q', 14))
+    eta = int(params['eta'])
+    eta_shift = int(params['eta_shift'])
+    lam_x = int(params['lambda_x'])
+    lam_y = int(params['lambda_y'])
+    b_pre = int(params['b_pre'])
+    b_post = int(params['b_post'])
+
+    # 추적 변수 (Q14 정수 스케일)
+    if 'x' not in state:
+        state['x'] = np.zeros_like(pre_bits, dtype=np.int64)
+    if 'y' not in state:
+        state['y'] = np.zeros_like(post_bits, dtype=np.int64)
+
+    x = state['x']  # (F,)  presyn trace, Q14
+    y = state['y']  # (N,)  postsyn trace, Q14
+
+    # 1) 추적 지수감쇠: x <- round((lam_x * x) / 2^Q), y도 동일
+    x[:] = _q14_round_div(lam_x * x, Q)
+    y[:] = _q14_round_div(lam_y * y, Q)
+
+    # 2) 스파이크 발생 시 바이어스 추가 (Q14 스케일)
+    #    pre_bits/post_bits는 0/1이므로, Q14로 올려 더함
+    if pre_bits.any():
+        x[:] += (pre_bits.astype(np.int64) * b_pre)
+    if post_bits.any():
+        y[:] += (post_bits.astype(np.int64) * b_post)
+
+    # 3) STDP 업데이트
+    #    흔한 형태: ΔW = η * ( pre_bits ⊗ y  −  x ⊗ post_bits )
+    #    (⊗: 외적, 모든 항은 Q14 스케일)
+    #    결과는 Q14로 다시 스케일링: (η/2^eta_shift) * Q14 -> 최종은 정수로 가중치에 더함
+    #    계산 중 오버플로 방지를 위해 int64로 확장
+    pre_outer_y  = np.outer(pre_bits.astype(np.int64), y)      # (F,N) Q14
+    x_outer_post = np.outer(x, post_bits.astype(np.int64))     # (F,N) Q14
+    dW_q14 = pre_outer_y - x_outer_post                        # (F,N) Q14
+
+    # η 적용 및 스케일 다운
+    dW_scaled = (eta * dW_q14) >> int(eta_shift)               # 여전히 Q14 정수 해석
+
+    # 4) 가중치 갱신 & int16 범위로 클리핑
+    W[:] = _clip_int16(W.astype(np.int64) + dW_scaled)
+
+    # state 갱신 저장
+    state['x'] = x
+    state['y'] = y
 
 ART = os.path.join(os.path.dirname(__file__), "artifacts")
 
