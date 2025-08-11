@@ -143,3 +143,21 @@ selfcheck: test
 
 # CI 진입점(깨끗이 빌드 후 강제검증)
 ci: veryclean selfcheck
+
+# --- 아래 두 타겟을 Makefile 맨 끝쪽 .PHONY 블록 근처에 추가 ---
+
+.PHONY: learn_smoke learn_clean
+
+learn_clean:
+> @rm -f artifacts/weights_learned.hex artifacts/spikes_sw_learn.csv
+
+learn_smoke: $(ART)/X_events_ref.csv $(ART)/weights.hex $(ART)/vth.hex
+> python learn_stdp_sw.py \
+>   --in artifacts/X_events_ref.csv \
+>   --weights-in artifacts/weights.hex \
+>   --weights-out artifacts/weights_learned.hex \
+>   --vth artifacts/vth.hex \
+>   --F $(F) --N $(N) --T 64 --alpha $(ALPHA_Q14) --refrac 2 --thresh-mode ge \
+>   --eta 8 --eta-shift 12 --lambda-x 15565 --lambda-y 15565 --b-pre 1024 --b-post 1024 \
+>   --save-spikes artifacts/spikes_sw_learn.csv
+> @echo "[LEARN] done. outputs: artifacts/weights_learned.hex, artifacts/spikes_sw_learn.csv"
