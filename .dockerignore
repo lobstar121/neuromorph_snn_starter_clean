@@ -1,6 +1,11 @@
 obj_dir/
+obj_dir_*/
 obj_dir_alpha_*/
 release/
-**/__pycache__/
-*.pyc
-*.pyo
+artifacts/spikes_*.csv
+artifacts/diff_mask.csv
+artifacts/diff_heatmap.png
+artifacts/mismatch_*.csv
+.git
+.gitignore
+.github
