@@ -4,11 +4,11 @@ import numpy as np
 
 ART = "artifacts"
 
-def have(path): 
+def have(path):
     return os.path.exists(path)
 
 def run_sh(cmd_str: str):
-    """Run command under bash -lc so POSIX paths/flags work on MSYS2 & Linux."""
+    """Run command under bash -lc so POSIX paths/flags work on MSYS2/Ubuntu."""
     bash = shutil.which("bash") or "/usr/bin/bash"
     if not have(bash):
         sys.exit("[ERROR] bash not found. Install MSYS2/Git Bash or adjust PATH.")
@@ -18,10 +18,13 @@ def run_sh(cmd_str: str):
         sys.exit(r.returncode)
 
 def build_with_alpha(alpha: int, mdir: str):
-    # --binary: build runnable binary directly; --timing: allow # delays/@events in TB
+    # A) 빌드 전 대상 Mdir 강제 삭제 → 오래된 Make 조각/오브젝트로 인한 충돌 방지
+    if os.path.isdir(mdir):
+        shutil.rmtree(mdir)
+    # --binary: 실행파일까지 한 번에 생성, --timing: TB의 #delay/@event 허용
     verilator = "/mingw64/bin/verilator"
     if not have(verilator):
-        verilator = "verilator"  # PATH fallback (Linux CI)
+        verilator = "verilator"  # PATH에 있으면 이것도 OK
     cmd = (
         f'{verilator} -sv --binary '
         f'tb_snn_mem.sv snn_core.sv lif_neuron.sv '
@@ -29,7 +32,7 @@ def build_with_alpha(alpha: int, mdir: str):
         f'-Mdir {mdir} -GALPHA_Q14={alpha} '
         f'--timing'
     )
-    run_sh(cmd)   # creates {mdir}/Vtb_snn_mem
+    run_sh(cmd)   # 실행파일: {mdir}/Vtb_snn_mem 생성됨
 
 def sim_with_alpha(mdir: str, outcsv: str, T: int = 76):
     exe = os.path.join(mdir, "Vtb_snn_mem")
@@ -44,8 +47,7 @@ def spike_rate(spikes_csv: str) -> float:
     return float(S.mean())
 
 if __name__ == "__main__":
-    os.makedirs(ART, exist_ok=True)
-    # 필요시 알파 값 조정
+    # 필요시 알파 값 수정
     alphas = [15360, 15474, 15600]
     results = []
     for a in alphas:

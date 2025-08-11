@@ -1,9 +1,9 @@
-# vth_sweep.py — VTH(hex) ±LSB sweep: HW↔SW(Q14) match & spike rate
+# vth_sweep.py — VTH(hex) ±LSB 스윕: HW↔SW(Q14) 매칭 & 발화율 수집
 import os, sys, subprocess, shutil
 import numpy as np
 
 ART = "artifacts"
-ALPHA = 15520  # ✅ 기본 알파(프로젝트 합의값)와 일치
+ALPHA = 15474  # 1단계에서 고른 값 고정(필요시 수정)
 T = 76
 F, N = 48, 96
 
@@ -32,8 +32,8 @@ def read_hex_q14(path):
 def write_hex_q14(path, arr):
     with open(path,"w") as f:
         for v in arr:
-            v16 = int(np.int16(v))
-            if v16 < 0: v16 = (1<<16) + v16
+            v16 = np.int16(v).astype(np.int32)
+            if v16<0: v16 = (1<<16)+v16
             f.write(f"{v16:04x}\n")
 
 def make_shifted(base_hex, shift):
@@ -60,48 +60,44 @@ def compare_csv(a,b):
     return mr if mr is not None else 0.0
 
 def ensure_binary(alpha, mdir):
+    # A) 빌드 전 대상 Mdir 강제 삭제
+    if os.path.isdir(mdir):
+        shutil.rmtree(mdir)
     verilator = "/mingw64/bin/verilator"
     if not have(verilator): verilator="verilator"
     cmd = f'{verilator} -sv --binary tb_snn_mem.sv snn_core.sv lif_neuron.sv ' \
           f'--top-module tb_snn_mem -Mdir {mdir} -GALPHA_Q14={alpha} --timing'
     run_sh(cmd)
 
-def run_one(vth_hex_name):
-    mdir = f"obj_dir_alpha_{ALPHA}"  # ✅ 하드코딩 제거
-    ensure_binary(ALPHA, mdir)
-
+def run_one(alpha, vth_hex_name):
+    mdir = f"obj_dir_alpha_{alpha}"
+    ensure_binary(alpha, mdir)
     out_hw = os.path.join(ART, f"spikes_hw_{vth_hex_name.replace('.hex','')}.csv")
     run_sh(f'./{mdir}/Vtb_snn_mem +EVHEX={ART}/events_ref.mem +WHEX={ART}/weights.hex '
            f'+VTH={ART}/{vth_hex_name} +T={T} +OUT={out_hw}')
 
     out_sw = os.path.join(ART, f"spikes_sw_q14_{vth_hex_name.replace('.hex','')}.csv")
-
-    # ✅ argparse 버전에 맞춰 호출
-    subprocess.check_call([
-        "python","sw_q14_from_csv.py",
-        "--in",  os.path.join(ART,"X_events_ref.csv"),
-        "--out", os.path.basename(out_sw),
-        "--T",   str(T),
-        "--vth", vth_hex_name,
-        "--weights", "weights.hex",
-        "--alpha", str(ALPHA),
-        "--quiet"
-    ])
+    # SW도 동일 vth로 재생
+    subprocess.check_call(["python","sw_q14_from_csv.py","--in", "artifacts/X_events_ref.csv",
+                           "--out", os.path.basename(out_sw),
+                           "--T", str(T), "--vth", vth_hex_name, "--weights", "weights.hex",
+                           "--alpha", str(alpha), "--quiet"])
 
     mr = compare_csv(out_hw, out_sw)
     sr = spike_rate(out_hw)
     return mr, sr, out_hw, out_sw
 
 if __name__=="__main__":
-    os.makedirs(ART, exist_ok=True)
+    # 쉬프트 후보(LSB): 필요시 조정
     shifts = [-4, -2, -1, 0, +1, +2, +4]
     results=[]
+    names=[]
     for s in shifts:
         name = "vth.hex" if s==0 else make_shifted("vth.hex", s)
-        mr, sr, _, _ = run_one(name)
+        names.append(name)
+        mr, sr, _, _ = run_one(ALPHA, name)
         results.append((s, mr, sr))
     res = np.array(results, dtype=float)
     out = os.path.join(ART, "vth_sweep_results.csv")
-    np.savetxt(out, res, fmt="%.6f", delimiter=",",
-               header="shift_LSB,match_ratio,mean_spike_rate", comments="")
+    np.savetxt(out, res, fmt="%.6f", delimiter=",", header="shift_LSB,match_ratio,mean_spike_rate", comments="")
     print(f"[VTH-SWEEP] saved {out}")

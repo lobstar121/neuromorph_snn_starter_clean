@@ -40,6 +40,9 @@ def make_vth_shift(base_hex, shift, outname=None):
     return name
 
 def ensure_binary(alpha, mdir):
+    # A) 빌드 전 대상 Mdir 강제 삭제
+    if os.path.isdir(mdir):
+        shutil.rmtree(mdir)
     verilator = "/mingw64/bin/verilator"
     if not have(verilator): verilator = "verilator"
     cmd = (
@@ -59,12 +62,12 @@ def sim_hw(mdir, vth_hex, outcsv):
     )
 
 def sim_sw(x_csv, out_csv, T, vth_hex, alpha_q14):
-    # ✅ argparse 버전으로 호출
+    # sw_q14_from_csv.py (argparse 버전)
     subprocess.check_call([
         "python","sw_q14_from_csv.py",
-        "--in",  os.path.join(ART, x_csv),
-        "--out", out_csv,
-        "--T",   str(T),
+        "--in", os.path.join(ART, x_csv),
+        "--out", os.path.join(ART, out_csv),
+        "--T", str(T),
         "--vth", vth_hex,
         "--weights", "weights.hex",
         "--alpha", str(alpha_q14),
@@ -87,7 +90,6 @@ def spike_rate(path_csv):
     return float(S.mean())
 
 if __name__=="__main__":
-    os.makedirs(ART, exist_ok=True)
     # --- 탐색 격자 (필요시 수정) ---
     alphas = [15320, 15360, 15400, 15474, 15520, 15560, 15600]
     vth_shifts = [-4, -2, -1, 0, 1, 2, 4]
@@ -96,7 +98,7 @@ if __name__=="__main__":
     results=[]
     base_vth = "vth.hex"
 
-    # VTH 쉬프트 파일 미리 준비(0은 원본)
+    # 사전: VTH 쉬프트 파일 생성(0은 원본 사용)
     vth_files = {}
     for s in vth_shifts:
         if s == 0:
@@ -107,13 +109,13 @@ if __name__=="__main__":
 
     for a in alphas:
         mdir = f"obj_dir_alpha_{a}"
-        ensure_binary(a, mdir)
+        ensure_binary(a, mdir)   # 여기서만 리빌드 -> 같은 alpha 내에서는 재사용
         for s in vth_shifts:
             vth_hex = vth_files[s]
             # HW
             out_hw = os.path.join(ART, f"spikes_hw_a{a}_v{s:+d}.csv".replace("+","p"))
             sim_hw(mdir, vth_hex, out_hw)
-            # SW
+            # SW (동일 파라미터)
             out_sw = f"spikes_sw_q14_a{a}_v{s:+d}.csv".replace("+","p")
             sim_sw("X_events_ref.csv", out_sw, T, vth_hex, a)
 
