@@ -38,7 +38,10 @@ SRC       := tb_snn_mem.sv snn_core.sv lif_neuron.sv stdp_q14.sv
 SINGLE_CSV=$(ART)/X_events_single_f0.csv $(ART)/X_events_single_f1.csv $(ART)/X_events_single_f23.csv $(ART)/X_events_single_f24.csv
 SINGLE_MEM=$(SINGLE_CSV:.csv=.mem)
 
-.PHONY: all test golden hw swq14 compare smoke clean veryclean smoke_compare report alpha_sweep vth_sweep grid_sweep release compare_golden analyze finalize selfcheck ci learn_clean learn_smoke learn_grid learn_select learn_tune
+.PHONY: all test golden hw swq14 compare smoke clean veryclean smoke_compare report \
+        alpha_sweep vth_sweep grid_sweep release compare_golden analyze finalize \
+        selfcheck ci \
+        learn_clean learn_smoke learn_grid learn_select learn_tune
 
 swq14:
 > python fixedpoint_replay.py --alpha $(ALPHA_Q14)
@@ -49,11 +52,10 @@ SIM=$(OBJDIR)/V$(TOP)
 
 all: test
 
-# Verilator 5.x: --binary + --timing + parameter injection
 $(SIM): $(SRC)
 > $(VERILATOR) -sv --binary $(SRC) --top-module $(TOP) -Mdir $(OBJDIR) -GALPHA_Q14=$(ALPHA_Q14) $(TIMING)
 
-# ====== 1) 회귀 테스트 고정 ======
+# ====== 1) 회귀 테스트 ======
 $(EV_MEM): $(EV_REF)
 > python csv2mem.py $(EV_REF) $(F) $(EV_MEM)
 
@@ -65,7 +67,7 @@ compare:
 
 test: $(EV_MEM) hw swq14 compare
 
-# ====== 2) 골든 관리 ======
+# ====== 2) 골든 ======
 golden: swq14
 > cp -f $(SW_Q14) $(GOLD)
 > @echo "[GOLD] updated: $(GOLD)"
@@ -122,7 +124,7 @@ clean:
 veryclean: clean
 > @rm -rf $(OBJDIR)
 
-# ====== 5) Release package ======
+# ====== 5) Release ======
 release: $(SIM) $(EV_MEM) $(WHEX) $(VTH) $(GOLD)
 > @echo "[REL] assembling release/"
 > @rm -rf release
@@ -137,14 +139,13 @@ release: $(SIM) $(EV_MEM) $(WHEX) $(VTH) $(GOLD)
 > @python release_readme.py
 > @echo "[REL] done."
 
-# HW↔SW(Q14) 매치 1.0 아니면 실패
+# ====== 6) CI 기본 검사 ======
 selfcheck: test
 > python assert_match.py --expect 1.0 artifacts/spikes_hw.csv artifacts/spikes_sw_q14.csv
 
-# CI 진입점(깨끗이 빌드 후 강제검증)
 ci: veryclean selfcheck
 
-# ====== 6) STDP SW 학습 스모크 ======
+# ====== 7) STDP SW 학습 스모크 ======
 learn_clean:
 > @rm -f artifacts/weights_learned.hex artifacts/spikes_sw_learn.csv
 
@@ -157,10 +158,9 @@ learn_smoke: $(ART)/X_events_ref.csv $(ART)/weights.hex $(ART)/vth.hex
 >   --F $(F) --N $(N) --T 64 --alpha $(ALPHA_Q14) --refrac 2 --thresh-mode ge \
 >   --eta 8 --eta-shift 12 --lambda-x 15565 --lambda-y 15565 --b-pre 1024 --b-post 1024 \
 >   --save-spikes artifacts/spikes_sw_learn.csv
-> @echo "[LEARN] done. outputs: artifacts/weights_learned.hex, artifacts/spikes_sw_learn.csv"
+> @echo "[LEARN] outputs: artifacts/weights_learned.hex, artifacts/spikes_sw_learn.csv"
 
-# ====== 7) STDP 파라미터 튜닝 (grid -> select) ======
-# 그리드 파라미터(원하면 CI inputs로 조절)
+# ====== 8) STDP 파라미터 튜닝 (grid -> select) ======
 ETAS        ?= 4 8
 ETA_SHIFTS  ?= 12 13
 LAMBDAS     ?= 15500 15565
@@ -187,7 +187,7 @@ learn_grid: $(ART)/X_events_ref.csv $(ART)/weights.hex $(VTH)
 >           --F $(F) --N $(N) --T $(LEARN_T) --alpha $(ALPHA_Q14) --refrac 2 --thresh-mode ge \
 >           --eta $$e --eta-shift $$s --lambda-x $$lx --lambda-y $$ly --b-pre $(B_PRE) --b-post $(B_POST) \
 >           --save-spikes $$OUTSPI ; \
->         python - << 'PY' "$$OUTHEX" "$(ART)/weights.hex" "$$OUTSPI" "$(ART)/learn_grid.csv" "$$e" "$$s" "$$lx" "$$ly" "$(B_PRE)" "$(B_POST)"
+>         python - "$$OUTHEX" "$(ART)/weights.hex" "$$OUTSPI" "$(ART)/learn_grid.csv" "$$e" "$$s" "$$lx" "$$ly" "$(B_PRE)" "$(B_POST)" << 'PY' ; \
 import sys, numpy as np
 outhex, basehex, outspi, csv, e, s, lx, ly, bp, bq = sys.argv[1:]
 def read_hex(path):
@@ -215,7 +215,7 @@ PY \
 > @echo "[LEARN-GRID] wrote $(ART)/learn_grid.csv"
 
 learn_select: $(ART)/learn_grid.csv
-> @python - << 'PY' "$(ART)/learn_grid.csv" "$(ART)/weights_learned_best.hex" "$(ART)/learn_selected.json"
+> @python - "$(ART)/learn_grid.csv" "$(ART)/weights_learned_best.hex" "$(ART)/learn_selected.json" << 'PY'
 import sys, json, numpy as np
 csv, dst, meta = sys.argv[1:]
 rows=[]
