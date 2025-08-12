@@ -118,21 +118,21 @@ module snn_core #(
     always_ff @(posedge clk or negedge rstn) begin
         if (!rstn) begin
             for (int n = 0; n < N; n++) begin
-                V_q14[n]      <= '0;
-                refrac[n]     <= 0;
-                spikes_vec[n] <= 1'b0;
+                V_q14[n]      = '0;
+                refrac[n]     = 0;
+                spikes_vec[n] = 1'b0;
             end
         end else begin
             for (int n = 0; n < N; n++) begin
                 // Spike 판정 (>=) & 불응기 게이트
                 if (active[n] && ($signed(V_next[n]) >= $signed(vth_rom[n]))) begin
-                    spikes_vec[n] <= 1'b1;
-                    V_q14[n]      <= 16'sd0; // v_reset=0
-                    refrac[n]     <= 2;      // 2 사이클 불응
+                    spikes_vec[n] = 1'b1;
+                    V_q14[n]      = 16'sd0; // v_reset=0
+                    refrac[n]     = 2;      // 2 사이클 불응
                 end else begin
-                    spikes_vec[n] <= 1'b0;
-                    V_q14[n]      <= V_next[n];
-                    refrac[n]     <= (refrac[n] > 0) ? (refrac[n] - 1) : 0;
+                    spikes_vec[n] = 1'b0;
+                    V_q14[n]      = V_next[n];
+                    refrac[n]     = (refrac[n] > 0) ? (refrac[n] - 1) : 0;
                 end
             end
         end
