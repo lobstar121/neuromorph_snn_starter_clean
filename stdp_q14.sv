@@ -1,8 +1,5 @@
 // stdp_q14.sv — Q1.14 STDP (sequential: 1 weight per clock)
-// - Updates x[F], y[N] traces (decay + spike add)
-// - Computes dW for pair (f_idx,n_idx) per cycle
-// - Writes back clamped weight to external memory port
-// - Compatible with Verilator (no decls inside for-loop bodies)
+// Verilator 친화: 루프 내부 선언/지연할당 피하고, 명시적 캐스팅으로 폭 경고 제거
 
 `timescale 1ns/1ps
 `default_nettype none
@@ -54,9 +51,12 @@ module stdp_q14 #(
   logic [FW-1:0] f_idx;
   logic [NW-1:0] n_idx;
 
+  // 폭 일치 상수
+  localparam logic [FW-1:0] Fm1 = logic'(FW'(F-1));
+  localparam logic [NW-1:0] Nm1 = logic'(NW'(N-1));
+
   // ----------------------------
   // Combinational helpers/temps
-  // (선언은 블록 밖에 모아둬서 Verilator OK)
   // ----------------------------
   // Decay products
   logic signed [63:0] prod_x;      // lambda_x * x_tr[f]
@@ -81,10 +81,14 @@ module stdp_q14 #(
   logic [AW-1:0]      addr_comb;
 
   // ----------------------------
-  // Address combine: f*N + n
+  // Address combine: f*N + n  (명시적 캐스팅으로 폭 경고 제거)
   // ----------------------------
   function automatic [AW-1:0] fn_addr(input int f, input int n);
-    fn_addr = (f * N) + n;
+    logic [31:0] tmp;
+    begin
+      tmp     = (32'(f) * 32'(N)) + 32'(n);
+      fn_addr = AW'(tmp);
+    end
   endfunction
 
   // ----------------------------
@@ -102,7 +106,8 @@ module stdp_q14 #(
     bias_x  = (prod_x >= 0) ? (32'sd1 <<< (Q-1)) : -(32'sd1 <<< (Q-1));
     bias_y  = (prod_y >= 0) ? (32'sd1 <<< (Q-1)) : -(32'sd1 <<< (Q-1));
 
-    x_decayed = ( (prod_x[31:0] + bias_x) >>> Q ); // 하위 32비트로 충분 (Q≤14)
+    // 하위 32비트 사용 + 라운드 후 쉬프트
+    x_decayed = ( (prod_x[31:0] + bias_x) >>> Q );
     y_decayed = ( (prod_y[31:0] + bias_y) >>> Q );
 
     // spike add (Q14)
@@ -117,8 +122,8 @@ module stdp_q14 #(
     dW_q14 = (pre_f ? y_sel : 32'sd0) - (post_n ? x_sel : 32'sd0);
 
     // scale: (eta * dW_q14) >> eta_shift
-    eta_mul  = $signed(eta) * $signed(dW_q14);       // 16x32 -> 48..64
-    dW_scaled= $signed(eta_mul >>> eta_shift);       // 산술 시프트
+    eta_mul   = $signed(eta) * $signed(dW_q14);       // 16x32 -> 48..64
+    dW_scaled = $signed( (eta_mul >>> eta_shift)[31:0] ); // 64→32 명시 슬라이스
 
     // weight old & new
     w_old32  = {{16{w_rdata[15]}}, w_rdata};         // sign-extend 16→32
@@ -136,8 +141,8 @@ module stdp_q14 #(
     else
       w_clamped = w_new32[15:0];
 
-    // address
-    addr_comb = fn_addr(f_idx, n_idx);
+    // address (인자 캐스팅으로 폭 경고 제거)
+    addr_comb = fn_addr(int'(f_idx), int'(n_idx));
   end
 
   // ----------------------------
@@ -162,9 +167,8 @@ module stdp_q14 #(
       w_wdata<= w_clamped;
 
       if (enable) begin
-        // 현재 (f_idx, n_idx)에 대한 trace write-back
-        // (decay+spike 반영된 값을 메모리에 저장)
-        x_tr[f_idx] = x_upd; // blocking '=' : array in loop/idx OK with Verilator
+        // traces 업데이트 (블로킹 '=')
+        x_tr[f_idx] = x_upd;
         y_tr[n_idx] = y_upd;
 
         // weight write-back (enable_pre/post 조건 적용)
@@ -173,12 +177,12 @@ module stdp_q14 #(
           w_we <= 1'b1;
         end
 
-        // 인덱스 증가: n → f
-        if (n_idx == N-1) begin
+        // 인덱스 증가: n → f (폭 맞춘 상수 사용)
+        if (n_idx == Nm1) begin
           n_idx <= '0;
-          f_idx <= (f_idx == F-1) ? '0 : (f_idx + 1'b1);
+          f_idx <= (f_idx == Fm1) ? '0 : (f_idx + 1'b1);
         end else begin
-          n_idx <= n_idx + 1'b1;
+          n_idx <= (n_idx + 1'b1);
         end
       end
     end
