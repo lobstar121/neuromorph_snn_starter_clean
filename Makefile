@@ -1,351 +1,231 @@
-name: ci
+# =========================
+# Makefile (patched full)
+# =========================
+.RECIPEPREFIX := >
 
-on:
-  push:
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      run_smoke:
-        description: "Run smoke_compare"
-        type: boolean
-        default: false
-      run_sweeps:
-        description: "Run alpha/vth/grid sweeps"
-        type: boolean
-        default: false
-      run_learn:
-        description: "Run SW-only STDP learn_smoke"
-        type: boolean
-        default: false
-      run_learn_parity:
-        description: "Run SW learn + RTL learn + parity"
-        type: boolean
-        default: false
-      commit_sw_hex:
-        description: "After parity passes, open PR with weights_learned_sw.hex ([skip ci])"
-        type: boolean
-        default: false
+# ====== Config ======
+ART=artifacts
+F=48
+N=96
+T=76
 
-permissions:
-  contents: write         # PR/커밋용
-  packages: write
+EV_REF=$(ART)/X_events_ref.csv
+EV_MEM=$(ART)/events_ref.mem
+WHEX=$(ART)/weights.hex
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+# --- 선택형 파라미터 자동 반영 ---
+ALPHA_FILE := $(ART)/alpha_selected.txt
+VTH_SEL    := $(ART)/vth_selected.hex
 
-jobs:
-  # --- 기존 기본 테스트 (필요 없으면 삭제 가능) ---
-  test:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
+# 기본값
+ALPHA_Q14 ?= 15520
+VTH       := $(ART)/vth.hex
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+# 파일이 있으면 우선 사용
+ifneq ("$(wildcard $(ALPHA_FILE))","")
+ALPHA_Q14 := $(shell sed -n '1p' $(ALPHA_FILE))
+endif
+ifneq ("$(wildcard $(VTH_SEL))","")
+VTH := $(VTH_SEL)
+endif
 
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator make g++ python3-pip
-          python -m pip install --upgrade pip
-          pip install numpy matplotlib
+HW_OUT=$(ART)/spikes_hw.csv
+SW_Q14=$(ART)/spikes_sw_q14.csv
+GOLD=$(ART)/golden_spikes.csv
 
-      - name: Clean & build & compare
-        env:
-          ALPHA_Q14: "15520"
-        run: |
-          make veryclean || true
-          rm -f artifacts/events_ref.mem || true
-          make test
+# Toolchain / build opts
+VERILATOR ?= verilator
+TIMING    ?= --timing
+export ALPHA_Q14
 
-      - name: Assert match==1.0
-        run: |
-          python - << 'PY'
-          import numpy as np, sys, os
-          p = "artifacts/diff_mask.csv"
-          if not os.path.exists(p):
-              print("[CI] diff_mask.csv not found"); sys.exit(1)
-          A = np.loadtxt(p, delimiter=",", dtype=int)
-          s = int(A.sum())
-          print(f"[CI] diff sum = {s}")
-          sys.exit(0 if s==0 else 2)
-          PY
+TOP       := tb_snn_mem
+SRC       := tb_snn_mem.sv snn_core.sv lif_neuron.sv stdp_q14.sv
 
-      - name: Upload basic artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: basic-artifacts
-          path: |
-            artifacts/spikes_hw.csv
-            artifacts/spikes_sw_q14.csv
-            artifacts/diff_mask.csv
-            artifacts/diff_heatmap.png
-            artifacts/mismatch_*.csv
-            artifacts/mismatch_report.txt
-          if-no-files-found: ignore
+# 단일-특성 스모크 입력
+SINGLE_CSV=$(ART)/X_events_single_f0.csv $(ART)/X_events_single_f1.csv $(ART)/X_events_single_f23.csv $(ART)/X_events_single_f24.csv
+SINGLE_MEM=$(SINGLE_CSV:.csv=.mem)
 
-  # --- Docker 이미지 빌드/푸시 (원하면 유지) ---
-  docker-image:
-    runs-on: ubuntu-24.04
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Log in to GHCR
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build & (maybe) Push image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-      - name: Smoke test inside container
-        if: ${{ github.ref == 'refs/heads/main' }}
-        run: |
-          docker run --rm ghcr.io/${{ github.repository }}:latest \
-            bash -lc "make test && python compare_spikes.py artifacts/spikes_hw.csv artifacts/spikes_sw_q14.csv | grep 'match ratio: 1.000000'"
+# ====== SW 학습 sweep 파라미터 ======
+ETAS        ?= 4 8
+ETA_SHIFTS  ?= 12 13
+LAMBDAS     ?= 15500 15565
+B_PRE       ?= 1024
+B_POST      ?= 1024
+LEARN_T     ?= 64
 
-  # --- 수동 스모크 (원하면 유지) ---
-  smoke:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_smoke }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator make g++ python3-pip
-          pip install numpy
-      - name: Run smoke_compare
-        env:
-          ALPHA_Q14: "15520"
-        run: |
-          make veryclean || true
-          make smoke_compare
-      - name: Upload smoke artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smoke-artifacts
-          path: artifacts/*X_events_single*.csv
+# ====== 편의 ======
+swq14:
+> python fixedpoint_replay.py --alpha $(ALPHA_Q14)
 
-  # --- 수동 스윕 (원하면 유지) ---
-  sweeps:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_sweeps }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator make g++ python3-pip
-          pip install numpy
-      - name: Run alpha/vth/grid sweeps
-        env:
-          ALPHA_Q14: "15520"
-        run: |
-          make alpha_sweep
-          make vth_sweep
-          make grid_sweep
-      - name: Upload sweep results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sweep-results
-          path: artifacts/*sweep*csv
+# ====== Build RTL sim ======
+OBJDIR=obj_dir
+SIM=$(OBJDIR)/V$(TOP)
 
-  # --- SW-only 학습 (원하면 유지) ---
-  learn:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_learn }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps (SW-only)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y make g++ python3-pip
-          python -m pip install --upgrade pip
-          pip install numpy
-      - name: Run SW-only learn_smoke
-        env:
-          ALPHA_Q14: "15474"
-        run: |
-          make learn_clean || true
-          make learn_smoke
-      - name: Upload learn artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: learn-artifacts
-          path: |
-            artifacts/weights_learned.hex
-            artifacts/spikes_sw_learn.csv
-          if-no-files-found: warn
+.PHONY: all test golden hw swq14 compare smoke clean veryclean smoke_compare report alpha_sweep vth_sweep grid_sweep analyze finalize selfcheck ci learn_smoke learn_clean learn_grid
 
-  # ========= 여기부터 새로 추가: learn parity 파이프라인 =========
+all: test
 
-  learn_sw:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_learn_parity }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps (SW-only)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y make g++ python3-pip
-          python -m pip install --upgrade pip
-          pip install numpy
-      - name: Run SW-learn (reference)
-        run: |
-          make learn_clean || true
-          make learn_smoke
-          cp -f artifacts/weights_learned.hex artifacts/weights_learned_sw.hex
-      - name: Upload SW-learn artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: learn-sw
-          path: |
-            artifacts/weights_learned_sw.hex
-            artifacts/spikes_sw_learn.csv
+# Verilator 5.x: --binary + --timing + parameter injection
+$(SIM): $(SRC)
+> $(VERILATOR) -sv --binary $(SRC) --top-module $(TOP) -Mdir $(OBJDIR) -GALPHA_Q14=$(ALPHA_Q14) $(TIMING)
 
-  learn_rtl:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_learn_parity }}
-    needs: learn_sw
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps (RTL)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator make g++ python3-pip
-          pip install numpy
-      - name: Run RTL-learn
-        run: |
-          make veryclean || true
-          make learn_rtl
-      - name: Upload RTL-learn artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: learn-rtl
-          path: |
-            artifacts/weights_learned_rtl.hex
-            artifacts/spikes_hw_learn.csv
+# ====== 1) 회귀 테스트 고정 ======
+$(EV_MEM): $(EV_REF)
+> python csv2mem.py $(EV_REF) $(F) $(EV_MEM)
 
-  learn_parity:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_learn_parity }}
-    needs: [learn_sw, learn_rtl]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: learn-sw
-          path: sw
-      - uses: actions/download-artifact@v4
-        with:
-          name: learn-rtl
-          path: rtl
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install numpy
-      - name: Parity check (weights + spikes)
-        run: |
-          python - <<'PY'
-          import numpy as np, sys, os
-          def read_hex(path):
-              xs=[]
-              with open(path) as f:
-                  for ln in f:
-                      ln=ln.strip()
-                      if not ln: continue
-                      x=int(ln,16)
-                      if x & (1<<15): x -= (1<<16)
-                      xs.append(x)
-              return np.array(xs,dtype=np.int16)
+hw: $(SIM) $(EV_MEM) $(WHEX) $(VTH)
+> $(SIM) +EVHEX=$(EV_MEM) +WHEX=$(WHEX) +VTH=$(VTH) +T=$(T) +OUT=$(HW_OUT)
 
-          sw_hex = "sw/weights_learned_sw.hex"
-          rtl_hex= "rtl/weights_learned_rtl.hex"
-          sw_spk = "sw/spikes_sw_learn.csv"
-          rtl_spk= "rtl/spikes_hw_learn.csv"
+compare:
+> python compare_spikes.py $(HW_OUT) $(SW_Q14)
 
-          if not (os.path.exists(sw_hex) and os.path.exists(rtl_hex)):
-              print("[PARITY] missing hex files"); sys.exit(2)
-          Wsw = read_hex(sw_hex)
-          Wrt = read_hex(rtl_hex)
-          if Wsw.shape != Wrt.shape:
-              print(f"[PARITY] shape mismatch: {Wsw.shape} vs {Wrt.shape}")
-              sys.exit(2)
-          w_equal = np.array_equal(Wsw, Wrt)
-          print(f"[PARITY] weights equal: {w_equal}")
+test: $(EV_MEM) hw swq14 compare
 
-          # spikes optional but if present, require exact match
-          if os.path.exists(sw_spk) and os.path.exists(rtl_spk):
-              Ssw = np.loadtxt(sw_spk, delimiter=",", dtype=int)
-              Srt = np.loadtxt(rtl_spk, delimiter=",", dtype=int)
-              if Ssw.shape != Srt.shape:
-                  print(f"[PARITY] spike shape mismatch: {Ssw.shape} vs {Srt.shape}")
-                  sys.exit(2)
-              s_equal = np.array_equal(Ssw, Srt)
-              print(f"[PARITY] spikes equal: {s_equal}")
-              ok = w_equal and s_equal
-          else:
-              ok = w_equal
+# ====== 2) 골든 관리 ======
+golden: swq14
+> cp -f $(SW_Q14) $(GOLD)
+> @echo "[GOLD] updated: $(GOLD)"
 
-          sys.exit(0 if ok else 2)
-          PY
+compare_golden: hw
+> python compare_spikes.py $(HW_OUT) $(GOLD)
 
-      # --- (옵션) SW hex를 PR로 반영 ---
-      - name: Copy SW hex into repo (artifacts/weights_learned_sw.hex)
-        if: ${{ inputs.commit_sw_hex }}
-        run: |
-          mkdir -p artifacts
-          cp -f sw/weights_learned_sw.hex artifacts/weights_learned_sw.hex
+# ====== 3) 스모크 ======
+$(ART)/events_%.mem: $(ART)/X_events_%.csv
+> python csv2mem.py $< $(F) $@
 
-      - name: Create PR with weights_learned_sw.hex
-        if: ${{ inputs.commit_sw_hex }}
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "Add weights_learned_sw.hex [skip ci]"
-          title: "Update: weights_learned_sw.hex"
-          body: |
-            This PR updates the SW reference learned weights produced by CI parity run.
-            - Generated by workflow_dispatch run
-            - Includes [skip ci] to avoid recursive runs
-          branch: ci/update-sw-hex
-          add-paths: |
-            artifacts/weights_learned_sw.hex
+smoke: $(SIM) $(WHEX) $(VTH) $(SINGLE_MEM)
+> @for M in $(SINGLE_MEM); do \
+>   BASE=$${M%.mem}; \
+>   OUT=$(ART)/spikes_hw_$${BASE##*/}.csv; \
+>   echo "[SMOKE] $$M -> $$OUT"; \
+>   $(SIM) +EVHEX=$$M +WHEX=$(WHEX) +VTH=$(VTH) +T=16 +OUT=$$OUT; \
+> done
+> @echo "[SMOKE] done."
+
+smoke_compare: $(SIM) $(WHEX) $(VTH) $(SINGLE_MEM)
+> @for CSV in $(SINGLE_CSV); do \
+>   BASE=$${CSV##*/}; NAME=$${BASE%.csv}; \
+>   echo "[SMOKE-COMPARE] $$NAME"; \
+>   python sw_q14_from_csv.py $$BASE spikes_sw_q14_$${NAME}.csv 16; \
+>   $(SIM) +EVHEX=$(ART)/$${NAME}.mem +WHEX=$(WHEX) +VTH=$(VTH) +T=16 +OUT=$(ART)/spikes_hw_$${NAME}.csv; \
+>   python compare_spikes.py $(ART)/spikes_hw_$${NAME}.csv $(ART)/spikes_sw_q14_$${NAME}.csv; \
+> done
+> @echo "[SMOKE-COMPARE] done."
+
+report:
+> python spike_report.py artifacts/spikes_hw.csv hw
+> python spike_report.py artifacts/spikes_sw_q14.csv swq14
+
+# ====== 4) Tuning Sweeps (alpha/vth/grid) ======
+alpha_sweep:
+> PATH=/mingw64/bin:$(PATH) python alpha_sweep.py
+
+vth_sweep:
+> PATH=/mingw64/bin:$(PATH) python vth_sweep.py
+
+grid_sweep:
+> PATH=/mingw64/bin:$(PATH) python grid_sweep.py
+
+analyze:
+> python analyze_sweeps.py
+
+finalize: alpha_sweep vth_sweep grid_sweep analyze
+> @echo "[FINALIZE] alpha/VTH selection completed."
+
+# ====== 5) Clean ======
+clean:
+> @rm -f $(ART)/spikes_hw*.csv $(ART)/events_*.mem $(ART)/diff_mask.csv
+
+veryclean: clean
+> @rm -rf $(OBJDIR)
+
+# ====== 6) Release package ======
+release: $(SIM) $(EV_MEM) $(WHEX) $(VTH) $(GOLD)
+> @echo "[REL] assembling release/"
+> @rm -rf release
+> @mkdir -p release/artifacts
+> @cp -f $(SIM) release/
+> @cp -f tb_snn_mem.sv snn_core.sv lif_neuron.sv stdp_q14.sv Makefile release/
+> @cp -f fixedpoint_replay.py compare_spikes.py csv2mem.py sw_q14_from_csv.py analyze_sweeps.py release/
+> @cp -f $(ART)/weights.hex release/artifacts/
+> @cp -f $(ART)/vth.hex release/artifacts/
+> @cp -f $(ART)/events_ref.mem release/artifacts/
+> @cp -f $(ART)/golden_spikes.csv release/artifacts/
+> @python release_readme.py
+> @echo "[REL] done."
+
+# HW↔SW(Q14) 매치 1.0 아니면 실패
+selfcheck: test
+> python assert_match.py --expect 1.0 artifacts/spikes_hw.csv artifacts/spikes_sw_q14.csv
+
+# CI 진입점(깨끗이 빌드 후 강제검증)
+ci: veryclean selfcheck
+
+# ====== 7) SW-only STDP (smoke) ======
+learn_clean:
+> @rm -f artifacts/weights_learned.hex artifacts/spikes_sw_learn.csv artifacts/learn_grid.csv artifacts/learn_selected.json artifacts/weights_learned_best.hex
+
+learn_smoke: $(ART)/X_events_ref.csv $(ART)/weights.hex $(ART)/vth.hex
+> python learn_stdp_sw.py \
+>   --in artifacts/X_events_ref.csv \
+>   --weights-in artifacts/weights.hex \
+>   --weights-out artifacts/weights_learned.hex \
+>   --vth artifacts/vth.hex \
+>   --F $(F) --N $(N) --T $(LEARN_T) --alpha $(ALPHA_Q14) --refrac 2 --thresh-mode ge \
+>   --eta 8 --eta-shift 12 --lambda-x 15565 --lambda-y 15565 --b-pre 1024 --b-post 1024 \
+>   --save-spikes artifacts/spikes_sw_learn.csv
+> @echo "[LEARN] done. outputs: artifacts/weights_learned.hex, artifacts/spikes_sw_learn.csv"
+
+# ====== 8) STDP 학습 파라미터 Sweep (fixed) ======
+learn_grid: $(ART)/X_events_ref.csv $(ART)/weights.hex $(VTH)
+> set -e
+> echo "[LEARN-GRID] sweep start"
+> rm -f $(ART)/learn_grid.csv
+> echo "eta,eta_shift,lambda_x,lambda_y,b_pre,b_post,spike_sum,weight_l1,out_hex" > $(ART)/learn_grid.csv
+> for e in $(ETAS); do \
+>   for s in $(ETA_SHIFTS); do \
+>     for lx in $(LAMBDAS); do \
+>       for ly in $(LAMBDAS); do \
+>         OUTHEX=$(ART)/weights_learn_e$${e}_s$${s}_lx$${lx}_ly$${ly}.hex; \
+>         OUTSPI=$(ART)/spikes_sw_learn_e$${e}_s$${s}_lx$${lx}_ly$${ly}.csv; \
+>         echo "[LEARN] eta=$${e} s=$${s} lx=$${lx} ly=$${ly} -> $$OUTHEX"; \
+>         python learn_stdp_sw.py \
+>           --in $(ART)/X_events_ref.csv \
+>           --weights-in $(ART)/weights.hex \
+>           --weights-out $$OUTHEX \
+>           --vth $(VTH) \
+>           --F $(F) --N $(N) --T $(LEARN_T) --alpha $(ALPHA_Q14) --refrac 2 --thresh-mode ge \
+>           --eta $$e --eta-shift $$s --lambda-x $$lx --lambda-y $$ly --b-pre $(B_PRE) --b-post $(B_POST) \
+>           --save-spikes $$OUTSPI; \
+>         python -c "import sys,numpy as np; \
+>outhex,basehex,outspi,csv,e,s,lx,ly,bp,bq=sys.argv[1:]; \
+>to_i16=lambda L: np.array([ (int(x,16)-(1<<16)) if (int(x,16)&(1<<15)) else int(x,16) for x in L ],dtype=np.int16); \
+>rd=lambda p: [l.strip() for l in open(p) if l.strip()]; \
+>Wn=to_i16(rd(outhex)); Wb=to_i16(rd(basehex)); \
+>l1=int(np.abs(Wn.astype(np.int32)-Wb.astype(np.int32)).sum()); \
+>spikes=np.loadtxt(outspi,delimiter=',',dtype=int); \
+>spike_sum=int(spikes.sum()) if getattr(spikes,'size',0) else 0; \
+>open(csv,'a').write(','.join([e,s,lx,ly,bp,bq,str(spike_sum),str(l1),outhex])+'\\n')" \
+>           "$$OUTHEX" "$(ART)/weights.hex" "$$OUTSPI" "$(ART)/learn_grid.csv" "$$e" "$$s" "$$lx" "$$ly" "$(B_PRE)" "$(B_POST)"; \
+>       done; \
+>     done; \
+>   done; \
+> done
+> echo "[LEARN-GRID] wrote $(ART)/learn_grid.csv"
+
+# ===== Parity: SW-learn vs RTL-learn =====
+.PHONY: learn_rtl parity
+
+learn_rtl: $(EV_MEM) $(WHEX) $(VTH) $(SIM)
+> @echo "[LEARN-RTL] start"
+> $(SIM) +EVHEX=$(EV_MEM) +WHEX=$(WHEX) +VTH=$(VTH) +T=64 \
+>        +OUT=artifacts/spikes_hw_learn.csv \
+>        +WOUT=artifacts/weights_learned_rtl.hex \
+>        +LEARN=1 +ETA=8 +ETA_SHIFT=12 +LAMBDA_X=15565 +LAMBDA_Y=15565 \
+>        +B_PRE=1024 +B_POST=1024 +WMIN=-16384 +WMAX=16384 +EN_PRE=1 +EN_POST=1
+
+parity: learn_smoke learn_rtl
+> @echo "[PARITY] compare spikes"
+> python compare_spikes.py artifacts/spikes_hw_learn.csv artifacts/spikes_sw_learn.csv | tee artifacts/parity_spikes.txt
+> @echo "[PARITY] compare weights"
+> python compare_weights.py artifacts/weights_learned_rtl.hex artifacts/weights_learned.hex | tee artifacts/parity_weights.txt
