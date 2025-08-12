@@ -2,9 +2,9 @@
 `default_nettype none
 
 module tb_snn_mem;
-    localparam int F = 48;
-    localparam int N = 96;
-    localparam int Q = 14;
+    localparam int F  = 48;
+    localparam int N  = 96;
+    localparam int Q  = 14;
     localparam int AW = $clog2(F*N);
     parameter  int ALPHA_Q14 = 15474;
 
@@ -71,73 +71,92 @@ module tb_snn_mem;
         .rb_data   (rb_data)
     );
 
+    // ------------------------
     // utils
+    // ------------------------
     task load_plusargs();
-        if (!$value$plusargs("WHEX=%s", whex))   whex   = "artifacts/weights.hex";
-        if (!$value$plusargs("VTH=%s",  vthx))   vthx   = "artifacts/vth.hex";
-        if (!$value$plusargs("EVHEX=%s", evhex)) evhex  = "artifacts/events_ref.mem";
-        if (!$value$plusargs("OUT=%s",  outcsv)) outcsv = "artifacts/spikes_hw.csv";
-        if (!$value$plusargs("WOUT=%s", wout))   wout   = "artifacts/weights_learned_rtl.hex";
-        if (!$value$plusargs("T=%d",    T))      T      = 76;
-        int l; if ($value$plusargs("LEARN=%d", l)) DO_LEARN = (l!=0);
-        // optional param overrides
-        void'($value$plusargs("ETA=%d",       P_eta));
+        // <<< 선언은 블록 맨 위에 >>>
+        int l;
         int tmp;
-        if ($value$plusargs("ETA_SHIFT=%d",   tmp)) P_eta_shift = tmp[7:0];
-        void'($value$plusargs("LAMBDA_X=%d",  P_lambda_x));
-        void'($value$plusargs("LAMBDA_Y=%d",  P_lambda_y));
-        void'($value$plusargs("B_PRE=%d",     P_b_pre));
-        void'($value$plusargs("B_POST=%d",    P_b_post));
-        void'($value$plusargs("WMIN=%d",      P_wmin));
-        void'($value$plusargs("WMAX=%d",      P_wmax));
         int ep, ept;
-        if ($value$plusargs("EN_PRE=%d",  ep))  P_en_pre  = (ep!=0);
-        if ($value$plusargs("EN_POST=%d", ept)) P_en_post = (ept!=0);
+        begin
+            if (!$value$plusargs("WHEX=%s", whex))   whex   = "artifacts/weights.hex";
+            if (!$value$plusargs("VTH=%s",  vthx))   vthx   = "artifacts/vth.hex";
+            if (!$value$plusargs("EVHEX=%s", evhex)) evhex  = "artifacts/events_ref.mem";
+            if (!$value$plusargs("OUT=%s",  outcsv)) outcsv = "artifacts/spikes_hw.csv";
+            if (!$value$plusargs("WOUT=%s", wout))   wout   = "artifacts/weights_learned_rtl.hex";
+            if (!$value$plusargs("T=%d",    T))      T      = 76;
+            if ($value$plusargs("LEARN=%d", l)) DO_LEARN = (l!=0);
 
-        $display("[TB] WHEX=%s  VTH=%s  EVHEX=%s", whex, vthx, evhex);
-        $display("[TB] OUT=%s  WOUT=%s  T=%0d  LEARN=%0d", outcsv, wout, T, DO_LEARN);
-        $display("[TB] ETA=%0d SHIFT=%0d Lx=%0d Ly=%0d bpre=%0d bpost=%0d wmin=%0d wmax=%0d enP=%0d enQ=%0d",
-                  P_eta, P_eta_shift, P_lambda_x, P_lambda_y, P_b_pre, P_b_post, P_wmin, P_wmax, P_en_pre, P_en_post);
+            // optional param overrides
+            void'($value$plusargs("ETA=%d",       P_eta));
+            if ($value$plusargs("ETA_SHIFT=%d",   tmp)) P_eta_shift = tmp[7:0];
+            void'($value$plusargs("LAMBDA_X=%d",  P_lambda_x));
+            void'($value$plusargs("LAMBDA_Y=%d",  P_lambda_y));
+            void'($value$plusargs("B_PRE=%d",     P_b_pre));
+            void'($value$plusargs("B_POST=%d",    P_b_post));
+            void'($value$plusargs("WMIN=%d",      P_wmin));
+            void'($value$plusargs("WMAX=%d",      P_wmax));
+            if ($value$plusargs("EN_PRE=%d",  ep))  P_en_pre  = (ep!=0);
+            if ($value$plusargs("EN_POST=%d", ept)) P_en_post = (ept!=0);
+
+            $display("[TB] WHEX=%s  VTH=%s  EVHEX=%s", whex, vthx, evhex);
+            $display("[TB] OUT=%s  WOUT=%s  T=%0d  LEARN=%0d", outcsv, wout, T, DO_LEARN);
+            $display("[TB] ETA=%0d SHIFT=%0d Lx=%0d Ly=%0d bpre=%0d bpost=%0d wmin=%0d wmax=%0d enP=%0d enQ=%0d",
+                      P_eta, P_eta_shift, P_lambda_x, P_lambda_y, P_b_pre, P_b_post, P_wmin, P_wmax, P_en_pre, P_en_post);
+        end
     endtask
 
     task load_mems();
-        $display("[TB] loading %s", whex);  $readmemh(whex, weights_mem);
-        $display("[TB] loading %s", vthx);  $readmemh(vthx,  vth_mem);
-        $display("[TB] loading %s", evhex); $readmemh(evhex, events_mem);
-        // poke into DUT ROMs
-        for (int i = 0; i < F*N; i++) dut.weights_rom[i] = weights_mem[i];
-        for (int i = 0; i < N;   i++) dut.vth_rom[i]     = vth_mem[i];
+        begin
+            $display("[TB] loading %s", whex);  $readmemh(whex, weights_mem);
+            $display("[TB] loading %s", vthx);  $readmemh(vthx,  vth_mem);
+            $display("[TB] loading %s", evhex); $readmemh(evhex, events_mem);
+            // poke into DUT ROMs
+            for (int i = 0; i < F*N; i++) dut.weights_rom[i] = weights_mem[i];
+            for (int i = 0; i < N;   i++) dut.vth_rom[i]     = vth_mem[i];
+        end
     endtask
 
     integer ofile;
 
     task dump_spike_row_to_csv();
-        for (int n = 0; n < N; n++) begin
-            $fwrite(ofile, "%0d", spikes_vec[n] ? 1 : 0);
-            if (n != N-1) $fwrite(ofile, ",");
+        begin
+            for (int n = 0; n < N; n++) begin
+                $fwrite(ofile, "%0d", spikes_vec[n] ? 1 : 0);
+                if (n != N-1) $fwrite(ofile, ",");
+            end
+            $fwrite(ofile, "\n");
         end
-        $fwrite(ofile, "\n");
     endtask
 
     // readback dump of weights_ram via rb_* ports
     task dump_weights_hex(string path);
-        integer wf = $fopen(path, "w");
-        if (wf == 0) begin
-            $display("[TB][ERR] cannot open %s", path);
-            return;
+        // <<< 선언을 블록 맨 위에 >>>
+        integer wf;
+        int signed   w;
+        int unsigned u;
+        begin
+            wf = $fopen(path, "w");
+            if (wf == 0) begin
+                $display("[TB][ERR] cannot open %s", path);
+                return;
+            end
+            for (int i = 0; i < F*N; i++) begin
+                rb_addr = i[AW-1:0];
+                @(posedge clk);
+                w = rb_data;
+                u = (w < 0) ? (w + (1<<16)) : w;
+                $fwrite(wf, "%04x\n", u[15:0]);
+            end
+            $fclose(wf);
+            $display("[TB] dumped learned weights to %s", path);
         end
-        for (int i = 0; i < F*N; i++) begin
-            rb_addr = i[AW-1:0];
-            @(posedge clk);
-            int signed w = rb_data;
-            int unsigned u = (w < 0) ? (w + (1<<16)) : w;
-            $fwrite(wf, "%04x\n", u[15:0]);
-        end
-        $fclose(wf);
-        $display("[TB] dumped learned weights to %s", path);
     endtask
 
+    // ------------------------
     // main
+    // ------------------------
     initial begin
         stdp_enable   = 1'b0;
         stdp_pre_bits = '0;
@@ -176,7 +195,7 @@ module tb_snn_mem;
                 stdp_pre_bits  = event_vec_reg;
                 stdp_post_bits = spikes_vec;
                 stdp_enable    = 1'b1;
-                // 한 스텝당 전체 가중치 1회 스캔
+                // one full scan per step (F*N clocks)
                 for (int k = 0; k < F*N; k++) @(posedge clk);
                 stdp_enable    = 1'b0;
                 @(posedge clk);
