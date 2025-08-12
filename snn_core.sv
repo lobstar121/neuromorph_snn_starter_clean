@@ -41,9 +41,9 @@ module snn_core #(
     // ------------------------
     // ROM/RAM (TB가 public 배열에 $readmemh 후 복사)
     // ------------------------
-    /* verilator public_flat */ logic signed [15:0] weights_rom [0:(F*N)-1]; // Q1.14 signed
-    /* verilator public_flat */ logic signed [15:0] vth_rom     [0:N-1];     // Q1.14 signed
-    /* verilator public_flat */ logic signed [15:0] weights_ram [0:(F*N)-1]; // Q1.14 signed (STDP write-back 대상)
+    logic signed [15:0] weights_rom [0:(F*N)-1]; // Q1.14 signed
+    logic signed [15:0] vth_rom     [0:N-1];     // Q1.14 signed
+    logic signed [15:0] weights_ram [0:(F*N)-1]; // Q1.14 signed (STDP write-back 대상)
 
     // ------------------------
     // State (Q1.14 & refrac)
