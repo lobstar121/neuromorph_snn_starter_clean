@@ -212,3 +212,20 @@ learn_grid: $(ART)/X_events_ref.csv $(ART)/weights.hex $(VTH)
 >   done; \
 > done
 > echo "[LEARN-GRID] wrote $(ART)/learn_grid.csv"
+
+# ===== Parity: SW-learn vs RTL-learn =====
+.PHONY: learn_rtl parity
+
+learn_rtl: $(EV_MEM) $(WHEX) $(VTH) $(SIM)
+> @echo "[LEARN-RTL] start"
+> $(SIM) +EVHEX=$(EV_MEM) +WHEX=$(WHEX) +VTH=$(VTH) +T=64 \
+>        +OUT=artifacts/spikes_hw_learn.csv \
+>        +WOUT=artifacts/weights_learned_rtl.hex \
+>        +LEARN=1 +ETA=8 +ETA_SHIFT=12 +LAMBDA_X=15565 +LAMBDA_Y=15565 \
+>        +B_PRE=1024 +B_POST=1024 +WMIN=-16384 +WMAX=16384 +EN_PRE=1 +EN_POST=1
+
+parity: learn_smoke learn_rtl
+> @echo "[PARITY] compare spikes"
+> python compare_spikes.py artifacts/spikes_hw_learn.csv artifacts/spikes_sw_learn.csv | tee artifacts/parity_spikes.txt
+> @echo "[PARITY] compare weights"
+> python compare_weights.py artifacts/weights_learned_rtl.hex artifacts/weights_learned.hex | tee artifacts/parity_weights.txt
