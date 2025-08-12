@@ -2,41 +2,71 @@
 `default_nettype none
 
 module tb_snn_mem;
+    // ---- DUT 파라미터 ----
     localparam int F = 48;
     localparam int N = 96;
     localparam int Q = 14;
     parameter  int ALPHA_Q14 = 15474;
 
-    // DUT I/O
-    logic clk = 0;
+    // ---- 클럭/리셋 ----
+    logic clk  = 0;
     logic rstn = 0;
-
-    // 파이프라인 입력(레지스터) & 다음 자극 버퍼
-    logic [F-1:0] event_vec_reg;
-    logic [F-1:0] event_next;
-    logic [N-1:0] spikes_vec;
-
-    // DUT
-    snn_core #(.F(F), .N(N), .Q(Q), .ALPHA_Q14(ALPHA_Q14)) dut (
-        .clk       (clk),
-        .rstn      (rstn),
-        .event_vec (event_vec_reg),
-        .spikes_vec(spikes_vec)
-    );
 
     // 1ns 토글 클럭 (Verilator 5.x는 --timing 필요)
     always #1 clk = ~clk;
 
-    // plusargs & memories
+    // ---- 입출력 레지스터/버퍼 ----
+    logic [F-1:0] event_vec_reg;
+    logic [F-1:0] event_next;
+    logic [N-1:0] spikes_vec;
+
+    // ---- plusargs & 파일 핸들 ----
     string whex, vthx, evhex, outcsv;
     integer ofile;
     int T;
 
-    logic [F-1:0]        events_mem [0:65535];
-    logic signed [15:0]  weights_mem [0:(F*N)-1];
-    logic signed [15:0]  vth_mem     [0:N-1];
+    // ---- TB에서 로드하는 메모리들 ----
+    logic [F-1:0]        events_mem  [0:65535];      // stimulus (packed bits)
+    logic signed [15:0]  weights_mem [0:(F*N)-1];    // Q1.14
+    logic signed [15:0]  vth_mem     [0:N-1];        // Q1.14
 
-    // ----- 유틸 태스크 -----
+    // ---- STDP 스켈레톤용 더미 신호 (지금은 OFF) ----
+    localparam int AW = $clog2(F*N);
+    logic                  stdp_w_we;
+    logic [AW-1:0]         stdp_w_addr;
+    logic signed [15:0]    stdp_w_wdata;
+
+    // ---- DUT ----
+    snn_core #(
+        .F(F), .N(N), .Q(Q), .ALPHA_Q14(ALPHA_Q14)
+    ) dut (
+        .clk        (clk),
+        .rstn       (rstn),
+        .event_vec  (event_vec_reg),
+        .spikes_vec (spikes_vec),
+
+        // ===== STDP skeleton: 모두 비활성 =====
+        .stdp_enable      (1'b0),
+        .stdp_pre_bits    ('0),
+        .stdp_post_bits   ('0),
+        .stdp_eta         (16'sd0),
+        .stdp_eta_shift   (8'd0),
+        .stdp_lambda_x    (16'sd0),
+        .stdp_lambda_y    (16'sd0),
+        .stdp_b_pre       (16'sd0),
+        .stdp_b_post      (16'sd0),
+        .stdp_wmin        (16'sd0),
+        .stdp_wmax        (16'sd0),
+        .stdp_enable_pre  (1'b0),
+        .stdp_enable_post (1'b0),
+        .stdp_w_we        (stdp_w_we),
+        .stdp_w_addr      (stdp_w_addr),
+        .stdp_w_wdata     (stdp_w_wdata)
+    );
+
+    // ------------------------
+    // 유틸 태스크들
+    // ------------------------
     task load_plusargs();
         if (!$value$plusargs("WHEX=%s", whex))   whex   = "artifacts/weights.hex";
         if (!$value$plusargs("VTH=%s",  vthx))   vthx   = "artifacts/vth.hex";
@@ -54,7 +84,7 @@ module tb_snn_mem;
         $display("[TB] loading %s", evhex);
         $readmemh(evhex, events_mem);
 
-        // dut 내부 ROM에 복사
+        // DUT 내부 ROM으로 복사 (TB → 공개 배열)
         for (int i = 0; i < F*N; i++) dut.weights_rom[i] = weights_mem[i];
         for (int i = 0; i < N;   i++) dut.vth_rom[i]     = vth_mem[i];
     endtask
@@ -67,7 +97,9 @@ module tb_snn_mem;
         $fwrite(ofile, "\n");
     endtask
 
-    // ----- 메인 시퀀스 -----
+    // ------------------------
+    // 메인 시퀀스
+    // ------------------------
     initial begin
         load_plusargs();
         load_mems();
@@ -78,7 +110,7 @@ module tb_snn_mem;
             $finish;
         end
 
-        // 초기값
+        // 초기 값
         event_vec_reg = '0;
         event_next    = '0;
 
@@ -87,24 +119,23 @@ module tb_snn_mem;
         rstn = 1;
         @(posedge clk);
 
-        // ===== Warm-up 1 tick =====
-        // t=0 자극을 먼저 준비하고, 다음 엣지에서 레지스터에 싣기
+        // Warm-up 1 tick: t=0 이벤트 준비 후 다음 엣지에서 적재
         event_next = events_mem[0];
         @(posedge clk);
-        event_vec_reg = event_next;   // <<<< initial 블록에서는 블로킹 '=' 사용
+        event_vec_reg = event_next;   // 블로킹 '='
 
-        // ===== 본 루프 =====
+        // 본 루프
         for (int t = 0; t < T; t++) begin
             // 다음 자극 준비
             if (t+1 < T) event_next = events_mem[t+1];
             else         event_next = '0;
 
             @(posedge clk);
-            // 이 시점에서 spikes_vec = 직전 사이클 event_vec_reg의 결과 → t번째 결과
+            // 이 시점에서 spikes_vec는 직전 사이클 입력의 결과 → t번째 행
             dump_spike_row_to_csv();
 
-            // 다음 사이클 입력을 레지스터에 적재
-            event_vec_reg = event_next;  // <<<< 역시 '='
+            // 다음 사이클 입력 적재
+            event_vec_reg = event_next;  // 블로킹 '='
         end
 
         $fclose(ofile);
@@ -114,42 +145,3 @@ module tb_snn_mem;
 endmodule
 
 `default_nettype wire
-
-// tb_snn_mem.sv (일부 발췌)
-localparam int F = 48;
-localparam int N = 96;
-localparam int Q = 14;
-localparam int AW = $clog2(F*N);
-
-// 연결용 더미 와이어
-logic                  stdp_w_we;
-logic [AW-1:0]         stdp_w_addr;
-logic signed [15:0]    stdp_w_wdata;
-
-snn_core u_core (
-  .clk               (clk),
-  .rst_n             (rst_n),
-  // ... (기존 연결들) ...
-
-  // ---- STDP skeleton (모두 비활성) ----
-  .stdp_enable       (1'b0),
-  .stdp_pre_bits     ('0),
-  .stdp_post_bits    ('0),
-
-  .stdp_eta          (16'sd0),
-  .stdp_eta_shift    (8'd0),
-  .stdp_lambda_x     (16'sd0),
-  .stdp_lambda_y     (16'sd0),
-  .stdp_b_pre        (16'sd0),
-  .stdp_b_post       (16'sd0),
-  .stdp_wmin         (16'sd0),
-  .stdp_wmax         (16'sd0),
-  .stdp_enable_pre   (1'b0),
-  .stdp_enable_post  (1'b0),
-
-  .stdp_w_we         (stdp_w_we),
-  .stdp_w_addr       (stdp_w_addr),
-  .stdp_w_wdata      (stdp_w_wdata)
-);
-
-// stdp_w_* 는 현재 미사용 (연결 안 해도 OK)
