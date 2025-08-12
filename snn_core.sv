@@ -65,6 +65,7 @@ module snn_core #(
 
             acc32[n1]  = 32'sd0;
             for (int f = 0; f < F; f++) begin
+                // NOTE: Verilator에서는 for 루프 안 배열 누적 시 로컬 변수로 가져와 사용
                 logic signed [15:0] w16_local = 16'sd0;
                 logic signed [31:0] w32_local = 32'sd0;
                 if (event_vec[f]) begin
@@ -76,7 +77,7 @@ module snn_core #(
         end
 
         for (int n2 = 0; n2 < N; n2++) begin
-            // Verilator 메모: for 루프 안의 배열 갱신은 블로킹 '=' 사용
+            // NOTE: for 루프 안 배열 갱신은 블로킹 '=' 사용 권장(Verilator 제약 회피용)
             logic signed [31:0] bias =
                 (leak32[n2] >= 0) ? (32'sd1 <<< (Q-1)) : -(32'sd1 <<< (Q-1));
             logic signed [31:0] sum32_local;
