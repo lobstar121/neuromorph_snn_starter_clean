@@ -229,3 +229,17 @@ parity: learn_smoke learn_rtl
 > python compare_spikes.py artifacts/spikes_hw_learn.csv artifacts/spikes_sw_learn.csv | tee artifacts/parity_spikes.txt
 > @echo "[PARITY] compare weights"
 > python compare_weights.py artifacts/weights_learned_rtl.hex artifacts/weights_learned.hex | tee artifacts/parity_weights.txt
+
+# --- helpers ---
+.PHONY: learn_sw_ref learn_sw
+$(ART):
+> @mkdir -p $(ART)
+
+# SW 레퍼런스 고정: clean -> smoke -> copy
+learn_sw_ref: $(ART) learn_clean learn_smoke
+> @test -f $(ART)/weights_learned.hex || { echo "[ERR] $(ART)/weights_learned.hex not found"; exit 2; }
+> cp -f $(ART)/weights_learned.hex $(ART)/weights_learned_sw.hex
+> @echo "[LEARN-REF] pinned: $(ART)/weights_learned_sw.hex"
+
+# 익숙한 이름으로도 호출 가능
+learn_sw: learn_sw_ref
