@@ -17,6 +17,10 @@ on:
         description: "Run SW-only STDP learn_smoke"
         type: boolean
         default: false
+      run_learn_tune:              # ⬅️ 새 입력: STDP 학습 파라미터 튜닝
+        description: "Run STDP learn parameter grid & auto-select best"
+        type: boolean
+        default: false
 
 # Docker 패키지 푸시용 권한
 permissions:
@@ -212,6 +216,40 @@ jobs:
             artifacts/weights_learned.hex
             artifacts/spikes_sw_learn.csv
           if-no-files-found: warn
+
+  # ---- 수동 트리거: STDP 학습 파라미터 튜닝 & 자동선택 ----
+  learn_tune:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_learn_tune }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (SW-only)
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy
+
+      - name: Run learn parameter grid
+        run: |
+          make learn_grid
+
+      - name: Upload learn tuning artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: learn-tuning
+          path: |
+            artifacts/learn_grid.csv
+            artifacts/learn_selected.json
+            artifacts/weights_learned_best.hex
+            artifacts/weights_learned_*.hex
+            artifacts/spikes_sw_learn_*.csv
+          if-no-files-found: ignore
 
   # ---- Optional: run full tuning & finalize (manual) ----
   tune:

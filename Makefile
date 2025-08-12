@@ -161,3 +161,12 @@ learn_smoke: $(ART)/X_events_ref.csv $(ART)/weights.hex $(ART)/vth.hex
 >   --eta 8 --eta-shift 12 --lambda-x 15565 --lambda-y 15565 --b-pre 1024 --b-post 1024 \
 >   --save-spikes artifacts/spikes_sw_learn.csv
 > @echo "[LEARN] done. outputs: artifacts/weights_learned.hex, artifacts/spikes_sw_learn.csv"
+
+.PHONY: learn_grid learn_tune
+
+learn_grid:
+\tpython learn_param_sweep.py
+
+# learn_grid + 결과 요약(선택적으로 이미 learn_param_sweep.py가 다 해줌)
+learn_tune: learn_grid
+\t@echo "[OK] learn tuning done. See artifacts/learn_grid.csv and learn_selected.json"
