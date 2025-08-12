@@ -142,7 +142,7 @@ module tb_snn_mem;
             for (int i = 0; i < F*N; i++) begin
                 rb_addr = i[AW-1:0];
                 @(posedge clk);
-                w = rb_data;                               // <-- 재선언 금지, 대입만
+                w = $signed(rb_data);                 // 폭/부호 명시 캐스팅
                 u = (w < 0) ? (w + (1<<16)) : w;
                 $fwrite(wf, "%04x\n", u[15:0]);
             end
