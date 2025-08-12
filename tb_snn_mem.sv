@@ -8,6 +8,7 @@ module tb_snn_mem;
     localparam int AW = $clog2(F*N);
     parameter  int ALPHA_Q14 = 15474;
 
+    // clock/reset
     logic clk = 0;  always #1 clk = ~clk;
     logic rstn = 0;
 
@@ -15,16 +16,16 @@ module tb_snn_mem;
     logic [F-1:0] event_vec_reg, event_next;
     logic [N-1:0] spikes_vec;
 
-    // memories read from files
+    // memories
     logic [F-1:0]        events_mem  [0:65535];
     logic signed [15:0]  weights_mem [0:(F*N)-1];
     logic signed [15:0]  vth_mem     [0:N-1];
 
-    // stdp params / control
-    int    T;
-    bit    DO_LEARN;
+    // control
+    int T;
+    bit DO_LEARN;
 
-    // STDP params (defaults = SW smoke)
+    // STDP params (defaults)
     shortint signed P_eta        = 8;
     byte            P_eta_shift  = 12;
     shortint signed P_lambda_x   = 15565;
@@ -39,7 +40,7 @@ module tb_snn_mem;
     // files
     string whex, vthx, evhex, outcsv, wout;
 
-    // DUT
+    // STDP/Readback wires
     logic                 stdp_enable;
     logic [F-1:0]         stdp_pre_bits;
     logic [N-1:0]         stdp_post_bits;
@@ -47,6 +48,7 @@ module tb_snn_mem;
     logic [AW-1:0]        rb_addr;
     logic signed [15:0]   rb_data;
 
+    // DUT
     snn_core #(.F(F), .N(N), .Q(Q), .ALPHA_Q14(ALPHA_Q14)) dut (
         .clk        (clk),
         .rstn       (rstn),
@@ -71,15 +73,14 @@ module tb_snn_mem;
         .rb_data   (rb_data)
     );
 
-    // ------------------------
-    // utils
-    // ------------------------
-    task load_plusargs();
-        // <<< 선언은 블록 맨 위에 >>>
+    // --------------------------------
+    // Tasks
+    // --------------------------------
+    task automatic load_plusargs;
         int l;
         int tmp;
         int ep, ept;
-        begin
+        begin : LP
             if (!$value$plusargs("WHEX=%s", whex))   whex   = "artifacts/weights.hex";
             if (!$value$plusargs("VTH=%s",  vthx))   vthx   = "artifacts/vth.hex";
             if (!$value$plusargs("EVHEX=%s", evhex)) evhex  = "artifacts/events_ref.mem";
@@ -88,7 +89,6 @@ module tb_snn_mem;
             if (!$value$plusargs("T=%d",    T))      T      = 76;
             if ($value$plusargs("LEARN=%d", l)) DO_LEARN = (l!=0);
 
-            // optional param overrides
             void'($value$plusargs("ETA=%d",       P_eta));
             if ($value$plusargs("ETA_SHIFT=%d",   tmp)) P_eta_shift = tmp[7:0];
             void'($value$plusargs("LAMBDA_X=%d",  P_lambda_x));
@@ -107,12 +107,11 @@ module tb_snn_mem;
         end
     endtask
 
-    task load_mems();
+    task automatic load_mems;
         begin
             $display("[TB] loading %s", whex);  $readmemh(whex, weights_mem);
             $display("[TB] loading %s", vthx);  $readmemh(vthx,  vth_mem);
             $display("[TB] loading %s", evhex); $readmemh(evhex, events_mem);
-            // poke into DUT ROMs
             for (int i = 0; i < F*N; i++) dut.weights_rom[i] = weights_mem[i];
             for (int i = 0; i < N;   i++) dut.vth_rom[i]     = vth_mem[i];
         end
@@ -120,7 +119,7 @@ module tb_snn_mem;
 
     integer ofile;
 
-    task dump_spike_row_to_csv();
+    task automatic dump_spike_row_to_csv;
         begin
             for (int n = 0; n < N; n++) begin
                 $fwrite(ofile, "%0d", spikes_vec[n] ? 1 : 0);
@@ -130,13 +129,11 @@ module tb_snn_mem;
         end
     endtask
 
-    // readback dump of weights_ram via rb_* ports
-    task dump_weights_hex(string path);
-        // <<< 선언을 블록 맨 위에 >>>
+    task automatic dump_weights_hex(input string path);
         integer wf;
         int signed   w;
         int unsigned u;
-        begin
+        begin : DW
             wf = $fopen(path, "w");
             if (wf == 0) begin
                 $display("[TB][ERR] cannot open %s", path);
@@ -145,7 +142,7 @@ module tb_snn_mem;
             for (int i = 0; i < F*N; i++) begin
                 rb_addr = i[AW-1:0];
                 @(posedge clk);
-                w = rb_data;
+                w = rb_data;                               // <-- 재선언 금지, 대입만
                 u = (w < 0) ? (w + (1<<16)) : w;
                 $fwrite(wf, "%04x\n", u[15:0]);
             end
@@ -154,14 +151,14 @@ module tb_snn_mem;
         end
     endtask
 
-    // ------------------------
-    // main
-    // ------------------------
+    // --------------------------------
+    // Main
+    // --------------------------------
     initial begin
-        stdp_enable   = 1'b0;
-        stdp_pre_bits = '0;
-        stdp_post_bits= '0;
-        rb_addr       = '0;
+        stdp_enable    = 1'b0;
+        stdp_pre_bits  = '0;
+        stdp_post_bits = '0;
+        rb_addr        = '0;
 
         load_plusargs();
         load_mems();
@@ -183,14 +180,12 @@ module tb_snn_mem;
 
         // main loop
         for (int t = 0; t < T; t++) begin
-            // prepare next
             if (t+1 < T) event_next = events_mem[t+1];
             else         event_next = '0;
 
             @(posedge clk);
             dump_spike_row_to_csv();
 
-            // STDP pass
             if (DO_LEARN) begin
                 stdp_pre_bits  = event_vec_reg;
                 stdp_post_bits = spikes_vec;
@@ -201,7 +196,6 @@ module tb_snn_mem;
                 @(posedge clk);
             end
 
-            // next input
             event_vec_reg = event_next;
         end
 
