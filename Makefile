@@ -202,3 +202,17 @@ learn_grid: $(ART)/X_events_ref.csv $(ART)/weights.hex $(ART)/vth.hex
 learn_finalize: $(WEIGHTS_LEARNED_BEST)
 > cp -f $(WEIGHTS_LEARNED_BEST) $(ART)/weights_learned.hex
 > @echo "[LEARN-FINALIZE] copied to $(ART)/weights_learned.hex"
+
+.PHONY: learn_freeze
+learn_freeze: learn_clean
+> python learn_stdp_sw.py \
+>   --in artifacts/X_events_ref.csv \
+>   --weights-in artifacts/weights.hex \
+>   --weights-out artifacts/weights_learned.hex \
+>   --vth artifacts/vth.hex \
+>   --F $(F) --N $(N) --T 64 --alpha $(ALPHA_Q14) --refrac 2 --thresh-mode ge \
+>   --eta 8 --eta-shift 12 --lambda-x 15565 --lambda-y 15565 --b-pre 1024 --b-post 1024 \
+>   --save-spikes artifacts/spikes_sw_learn.csv
+> cp -f artifacts/weights_learned.hex artifacts/weights_learned_sw.hex
+> cp -f artifacts/spikes_sw_learn.csv artifacts/spikes_sw_learn_ref.csv
+> @echo "[FREEZE] SW refs updated: artifacts/weights_learned_sw.hex, artifacts/spikes_sw_learn_ref.csv"
