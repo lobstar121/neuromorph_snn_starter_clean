@@ -153,6 +153,98 @@ learn_smoke: $(ART)/X_events_ref.csv $(ART)/weights.hex $(ART)/vth.hex
 >   --save-spikes artifacts/spikes_sw_learn.csv
 > @echo "[LEARN] done. outputs: artifacts/weights_learned.hex, artifacts/spikes_sw_learn.csv"
 
+# =========================
+# 6) STDP SW 튜닝: grid -> select
+# =========================
+.PHONY: learn_grid learn_select learn_tune
+
+# 간단한 그리드 정의 (원하면 CI inputs로 빼도 됨)
+ETAS        ?= 4 8
+ETA_SHIFTS  ?= 12 13
+LAMBDAS     ?= 15500 15565
+B_PRE       ?= 1024
+B_POST      ?= 1024
+LEARN_T     ?= 64
+
+learn_grid: $(ART)/X_events_ref.csv $(ART)/weights.hex $(VTH)
+	@echo "[LEARN-GRID] sweep start"
+	@rm -f $(ART)/learn_grid.csv
+	@echo "eta,eta_shift,lambda_x,lambda_y,b_pre,b_post,spike_sum,weight_l1,out_hex" > $(ART)/learn_grid.csv
+	@for e in $(ETAS); do \
+	  for s in $(ETA_SHIFTS); do \
+	    for lx in $(LAMBDAS); do \
+	      for ly in $(LAMBDAS); do \
+	        OUTHEX=$(ART)/weights_learn_e$${e}_s$${s}_lx$${lx}_ly$${ly}.hex; \
+	        OUTSPI=$(ART)/spikes_sw_learn_e$${e}_s$${s}_lx$${lx}_ly$${ly}.csv; \
+	        echo "[LEARN] eta=$${e} s=$${s} lx=$${lx} ly=$${ly} -> $$OUTHEX"; \
+	        python learn_stdp_sw.py \
+	          --in $(ART)/X_events_ref.csv \
+	          --weights-in $(ART)/weights.hex \
+	          --weights-out $$OUTHEX \
+	          --vth $(VTH) \
+	          --F $(F) --N $(N) --T $(LEARN_T) --alpha $(ALPHA_Q14) --refrac 2 --thresh-mode ge \
+	          --eta $$e --eta-shift $$s --lambda-x $$lx --lambda-y $$ly --b-pre $(B_PRE) --b-post $(B_POST) \
+	          --save-spikes $$OUTSPI ; \
+	        python - << 'PY' "$$OUTHEX" "$(ART)/weights.hex" "$$OUTSPI" "$(ART)/learn_grid.csv" "$$e" "$$s" "$$lx" "$$ly" "$(B_PRE)" "$(B_POST)"
+import sys, numpy as np, os
+outhex, basehex, outspi, csv, e, s, lx, ly, bp, bq = sys.argv[1:]
+def read_hex(path):
+    xs=[]
+    with open(path) as f:
+        for ln in f:
+            ln=ln.strip()
+            if not ln: continue
+            x=int(ln,16)
+            if x & (1<<15): x -= (1<<16)
+            xs.append(x)
+    return np.array(xs, dtype=np.int16)
+Wb = read_hex(basehex)
+Wn = read_hex(outhex)
+l1 = int(np.abs(Wn.astype(np.int32) - Wb.astype(np.int32)).sum())
+spikes = np.loadtxt(outspi, delimiter=",", dtype=int)
+spike_sum = int(spikes.sum()) if spikes.size else 0
+with open(csv,"a") as f:
+    f.write(f"{e},{s},{lx},{ly},{bp},{bq},{spike_sum},{l1},{outhex}\n")
+PY \
+	      ; done; \
+	    done; \
+	  done; \
+	done
+	@echo "[LEARN-GRID] wrote $(ART)/learn_grid.csv"
+
+learn_select: $(ART)/learn_grid.csv
+	@python - << 'PY' "$(ART)/learn_grid.csv" "$(ART)/weights_learned_best.hex" "$(ART)/learn_selected.json"
+import sys, json, numpy as np, os
+csv, dst, meta = sys.argv[1:]
+rows=[]
+with open(csv) as f:
+    header=f.readline().strip().split(",")
+    for ln in f:
+        eta,esh,lx,ly,bp,bq,ss,l1,out = ln.strip().split(",")
+        rows.append(dict(eta=int(eta), eta_shift=int(esh),
+                         lambda_x=int(lx), lambda_y=int(ly),
+                         b_pre=int(bp), b_post=int(bq),
+                         spike_sum=int(ss), weight_l1=int(l1),
+                         out_hex=out))
+if not rows:
+    print("[select] grid empty"); sys.exit(2)
+# 규칙: spike_sum > 0 중 최대 → 동률이면 weight_l1 최소
+cands=[r for r in rows if r["spike_sum"]>0]
+cands = cands or rows
+best = sorted(cands, key=lambda r:(-r["spike_sum"], r["weight_l1"]))[0]
+# 복사
+with open(best["out_hex"]) as s, open(dst,"w") as d:
+    d.write(s.read())
+with open(meta,"w") as jf:
+    json.dump(best, jf, indent=2)
+print("[select] best:", best)
+PY
+	@echo "[LEARN-SELECT] -> $(ART)/weights_learned_best.hex , $(ART)/learn_selected.json"
+
+learn_tune: learn_grid learn_select
+	@echo "[LEARN-TUNE] done."
+
+
 # ====== 7) RTL 학습 + 패리티 ======
 learn_rtl: $(EV_MEM) $(WHEX) $(VTH) $(SIM)
 > $(SIM) +EVHEX=$(EV_MEM) +WHEX=$(WHEX) +VTH=$(VTH) +T=64 \
