@@ -46,9 +46,9 @@ module stdp_q14 #(
   logic [FW-1:0] f_idx;
   logic [NW-1:0] n_idx;
 
-  // width-matched constants
-  localparam logic [FW-1:0] Fm1 = logic'(FW'(F-1));
-  localparam logic [NW-1:0] Nm1 = logic'(NW'(N-1));
+  // width-matched constants (single cast → no width warnings)
+  localparam logic [FW-1:0] Fm1 = FW'(F-1);
+  localparam logic [NW-1:0] Nm1 = NW'(N-1);
 
   // Combinational temps
   logic               pre_f, post_n;
@@ -60,7 +60,7 @@ module stdp_q14 #(
 
   logic signed [31:0] dW_q14;
   logic signed [63:0] eta_mul;
-  logic signed [63:0] eta_shifted;   // NEW: hold shifted 64b before slicing
+  logic signed [63:0] eta_shifted;
   logic signed [31:0] dW_scaled;
 
   logic signed [31:0] w_old32, w_new32;
@@ -102,9 +102,9 @@ module stdp_q14 #(
     dW_q14 = (pre_f ? y_sel : 32'sd0) - (post_n ? x_sel : 32'sd0);
 
     // scale: (eta * dW_q14) >> eta_shift
-    eta_mul     = $signed(eta) * $signed(dW_q14);  // 16x32 → 64
-    eta_shifted = (eta_mul >>> eta_shift);         // hold then slice
-    dW_scaled   = $signed(eta_shifted[31:0]);      // 64→32
+    eta_mul     = $signed(eta) * $signed(dW_q14);   // 16x32 → 64
+    eta_shifted = (eta_mul >>> eta_shift);          // 64b keep
+    dW_scaled   = $signed(eta_shifted[31:0]);       // slice to 32b
 
     // weight new + clamp
     w_old32  = {{16{w_rdata[15]}}, w_rdata};
@@ -135,6 +135,7 @@ module stdp_q14 #(
       w_addr  <= '0;
       w_wdata <= '0;
     end else begin
+      // defaults
       w_we    <= 1'b0;
       w_addr  <= addr_comb;
       w_wdata <= w_clamped;
