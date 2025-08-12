@@ -35,7 +35,7 @@ TIMING    ?= --timing
 export ALPHA_Q14
 
 TOP       := tb_snn_mem
-SRC       := tb_snn_mem.sv snn_core.sv lif_neuron.sv
+SRC       := tb_snn_mem.sv snn_core.sv lif_neuron.sv stdp_q14.sv
 
 # 단일-특성 스모크 입력
 SINGLE_CSV=$(ART)/X_events_single_f0.csv $(ART)/X_events_single_f1.csv $(ART)/X_events_single_f23.csv $(ART)/X_events_single_f24.csv
