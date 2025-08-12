@@ -8,32 +8,32 @@ module snn_core #(
     // alpha = exp(-dt/tau) with dt=0.002, tau=0.035  → 0.944459... ≈ 15474 (Q1.14)
     parameter int ALPHA_Q14 = 15474
 )(
-    input  logic                 clk,
-    input  logic                 rstn,
+    input  logic                   clk,
+    input  logic                   rstn,
 
-    input  logic  [F-1:0]        event_vec,   // 0/1 events for this time step
-    output logic  [N-1:0]        spikes_vec,
+    input  logic  [F-1:0]          event_vec,   // 0/1 events for this time step
+    output logic  [N-1:0]          spikes_vec,
 
     // ===== STDP ports =====
-    input  logic                  stdp_enable,
-    input  logic [F-1:0]          stdp_pre_bits,
-    input  logic [N-1:0]          stdp_post_bits,
+    input  logic                   stdp_enable,
+    input  logic [F-1:0]           stdp_pre_bits,
+    input  logic [N-1:0]           stdp_post_bits,
 
-    input  logic signed [15:0]    stdp_eta,
-    input  logic        [7:0]     stdp_eta_shift,
-    input  logic signed [15:0]    stdp_lambda_x,
-    input  logic signed [15:0]    stdp_lambda_y,
-    input  logic signed [15:0]    stdp_b_pre,
-    input  logic signed [15:0]    stdp_b_post,
-    input  logic signed [15:0]    stdp_wmin,
-    input  logic signed [15:0]    stdp_wmax,
-    input  logic                  stdp_enable_pre,
-    input  logic                  stdp_enable_post,
+    input  logic signed [15:0]     stdp_eta,
+    input  logic        [7:0]      stdp_eta_shift,
+    input  logic signed [15:0]     stdp_lambda_x,
+    input  logic signed [15:0]     stdp_lambda_y,
+    input  logic signed [15:0]     stdp_b_pre,
+    input  logic signed [15:0]     stdp_b_post,
+    input  logic signed [15:0]     stdp_wmin,
+    input  logic signed [15:0]     stdp_wmax,
+    input  logic                   stdp_enable_pre,
+    input  logic                   stdp_enable_post,
 
-    output logic                  stdp_w_we,
+    output logic                   stdp_w_we,
     output logic [$clog2(F*N)-1:0] stdp_w_addr,
-    output logic signed [15:0]    stdp_w_wdata,
-    input  logic signed [15:0]    stdp_w_rdata
+    output logic signed [15:0]     stdp_w_wdata,
+    input  logic signed [15:0]     stdp_w_rdata
 );
 
     localparam int AW = $clog2(F*N);
@@ -98,7 +98,7 @@ module snn_core #(
         // next V (Q1.14) with **signed rounding** on leak path
         for (int n2 = 0; n2 < N; n2++) begin
             logic signed [31:0] sum32_local = 32'sd0;
-            // round-to-nearest for signed right shift by Q:
+            // signed round-to-nearest for right shift by Q
             logic signed [31:0] bias = (leak32[n2] >= 0)
                                      ? (32'sd1 <<< (Q-1))
                                      : -(32'sd1 <<< (Q-1));
@@ -140,7 +140,6 @@ module snn_core #(
     // ========================
     // STDP write-back to RAM
     // ========================
-    // 외부에서 stdp_w_we/addr/wdata가 들어오면 RAM 갱신
     always_ff @(posedge clk) begin
         if (stdp_w_we) begin
             weights_ram[stdp_w_addr] <= stdp_w_wdata;
