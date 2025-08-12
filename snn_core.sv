@@ -124,3 +124,48 @@ module snn_core #(
 endmodule
 
 `default_nettype wire
+
+// snn_core.sv (일부 발췌)
+
+// 기존 parameter 옆에 주소폭 localparam 추가(필요시 파일 상단에 배치)
+localparam int F = 48;
+localparam int N = 96;
+localparam int Q = 14;
+localparam int AW = $clog2(F*N);
+
+// 모듈 포트 목록에 STDP I/O 추가 (named port 사용 권장)
+module snn_core (
+  input  logic                  clk,
+  input  logic                  rst_n,
+  // ... (기존 포트들) ...
+
+  // ===== STDP skeleton ports (기능은 아직 OFF) =====
+  input  logic                  stdp_enable,
+  input  logic [F-1:0]          stdp_pre_bits,
+  input  logic [N-1:0]          stdp_post_bits,
+
+  input  logic signed [15:0]    stdp_eta,
+  input  logic        [7:0]     stdp_eta_shift,
+  input  logic signed [15:0]    stdp_lambda_x,
+  input  logic signed [15:0]    stdp_lambda_y,
+  input  logic signed [15:0]    stdp_b_pre,
+  input  logic signed [15:0]    stdp_b_post,
+  input  logic signed [15:0]    stdp_wmin,
+  input  logic signed [15:0]    stdp_wmax,
+  input  logic                  stdp_enable_pre,
+  input  logic                  stdp_enable_post,
+
+  output logic                  stdp_w_we,
+  output logic [AW-1:0]         stdp_w_addr,
+  output logic signed [15:0]    stdp_w_wdata
+);
+
+  // ... (기존 로직 그대로) ...
+
+  // ===== STDP no-op tie-offs =====
+  // 아직 stdp_q14를 연결하지 않고 완전 무시
+  assign stdp_w_we    = 1'b0;
+  assign stdp_w_addr  = '0;
+  assign stdp_w_wdata = '0;
+
+endmodule

@@ -114,3 +114,42 @@ module tb_snn_mem;
 endmodule
 
 `default_nettype wire
+
+// tb_snn_mem.sv (일부 발췌)
+localparam int F = 48;
+localparam int N = 96;
+localparam int Q = 14;
+localparam int AW = $clog2(F*N);
+
+// 연결용 더미 와이어
+logic                  stdp_w_we;
+logic [AW-1:0]         stdp_w_addr;
+logic signed [15:0]    stdp_w_wdata;
+
+snn_core u_core (
+  .clk               (clk),
+  .rst_n             (rst_n),
+  // ... (기존 연결들) ...
+
+  // ---- STDP skeleton (모두 비활성) ----
+  .stdp_enable       (1'b0),
+  .stdp_pre_bits     ('0),
+  .stdp_post_bits    ('0),
+
+  .stdp_eta          (16'sd0),
+  .stdp_eta_shift    (8'd0),
+  .stdp_lambda_x     (16'sd0),
+  .stdp_lambda_y     (16'sd0),
+  .stdp_b_pre        (16'sd0),
+  .stdp_b_post       (16'sd0),
+  .stdp_wmin         (16'sd0),
+  .stdp_wmax         (16'sd0),
+  .stdp_enable_pre   (1'b0),
+  .stdp_enable_post  (1'b0),
+
+  .stdp_w_we         (stdp_w_we),
+  .stdp_w_addr       (stdp_w_addr),
+  .stdp_w_wdata      (stdp_w_wdata)
+);
+
+// stdp_w_* 는 현재 미사용 (연결 안 해도 OK)
