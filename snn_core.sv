@@ -56,7 +56,7 @@ module snn_core #(
     // ----- readback -----
     assign rb_data = weights_ram[rb_addr];
 
-    // ----- STD P instance -----
+    // ----- STDP instance -----
     logic                  w_we_i;
     logic [AW-1:0]         w_addr_i;
     logic signed [15:0]    w_wdata_i;
@@ -92,29 +92,40 @@ module snn_core #(
 
     // ----- combinational datapath -----
     always_comb begin
+        // 기본값으로 모두 초기화 → 래치 방지
         for (int i = 0; i < N; i++) begin
-            active[i] = (refrac[i] <= 0);
-            leak32[i] = $signed(ALPHA_Q14) * $signed(V_q14[i]); // Q1.14*Q1.14 -> Q2.28
+            active[i] = 1'b0;
+            leak32[i] = 32'sd0;
             acc32[i]  = 32'sd0;
+            V_next[i] = 16'sd0;
         end
 
-        // accumulate inputs
+        // active & leak
+        for (int n = 0; n < N; n++) begin
+            active[n] = (refrac[n] <= 0);
+            leak32[n] = $signed(ALPHA_Q14) * $signed(V_q14[n]); // Q1.14*Q1.14
+        end
+
+        // input accumulation (모든 경로에서 w16/w32 기본값 부여 → 래치 방지)
         for (int n = 0; n < N; n++) begin
             for (int f = 0; f < F; f++) begin
+                logic signed [15:0] w16 = 16'sd0;
+                logic signed [31:0] w32 = 32'sd0;
                 if (event_vec[f]) begin
-                    logic signed [15:0] w16 = weights_ram[f*N + n];
-                    logic signed [31:0] w32 = {{16{w16[15]}}, w16};
-                    acc32[n] += w32;
+                    w16 = weights_ram[f*N + n];
+                    w32 = {{16{w16[15]}}, w16};
                 end
+                acc32[n] += w32;
             end
         end
 
-        // next V with signed rounding shift
+        // next V with signed rounding shift (bias/sum32도 기본값 경로 존재)
         for (int n = 0; n < N; n++) begin
-            logic signed [31:0] bias = (leak32[n] >= 0)
-                                      ? (32'sd1 <<< (Q-1))
-                                      : -(32'sd1 <<< (Q-1));
-            logic signed [31:0] sum32 = ((leak32[n] + bias) >>> Q) + acc32[n];
+            logic signed [31:0] bias  = 32'sd0;
+            logic signed [31:0] sum32 = 32'sd0;
+            bias  = (leak32[n] >= 0) ? (32'sd1 <<< (Q-1))
+                                     : -(32'sd1 <<< (Q-1));
+            sum32 = ((leak32[n] + bias) >>> Q) + acc32[n];
             if (sum32 > 32'sd32767)       V_next[n] = 16'sd32767;
             else if (sum32 < -32'sd32768) V_next[n] = -16'sd32768;
             else                           V_next[n] = sum32[15:0];
@@ -126,8 +137,8 @@ module snn_core #(
         if (!rstn) begin
             // init states
             for (int n = 0; n < N; n++) begin
-                V_q14[n]  = '0;      // 블로킹 할당(Verilator 제약)
-                refrac[n] = 0;
+                V_q14[n]      = '0;      // 블로킹(Verilator 제약)
+                refrac[n]     = 0;
                 spikes_vec[n] = 1'b0;
             end
             // init RAM from ROM (TB가 ROM을 먼저 채움)
