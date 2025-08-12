@@ -45,7 +45,7 @@ module tb_snn_mem;
         .event_vec  (event_vec_reg),
         .spikes_vec (spikes_vec),
 
-        // ===== STDP skeleton: 모두 비활성 =====
+        // ===== STDP skeleton: 모두 비활성 (tie-off) =====
         .stdp_enable      (1'b0),
         .stdp_pre_bits    ('0),
         .stdp_post_bits   ('0),
@@ -59,9 +59,14 @@ module tb_snn_mem;
         .stdp_wmax        (16'sd0),
         .stdp_enable_pre  (1'b0),
         .stdp_enable_post (1'b0),
+
+        // write-back 인터페이스 (현재 미사용)
         .stdp_w_we        (stdp_w_we),
         .stdp_w_addr      (stdp_w_addr),
-        .stdp_w_wdata     (stdp_w_wdata)
+        .stdp_w_wdata     (stdp_w_wdata),
+
+        // 🔧 반드시 연결: 입력 핀 누락(PINMISSING) 방지
+        .stdp_w_rdata     (16'sd0)
     );
 
     // ------------------------
